@@ -1851,7 +1851,83 @@ document.getElementById('gas-sync-btn').addEventListener('click',async()=>{
 // ════════════════════════════════════════
 // WELCOME SCREEN
 // ════════════════════════════════════════
-function showWelcome(){document.getElementById('welcome-overlay').classList.remove('hidden');}
+// すでに showWelcome という関数があれば、これに書き換えてください
+function showWelcome() {
+  const overlay = document.getElementById('welcome-overlay');
+  if (!overlay) return; // 要素がない場合はスキップ
+
+  overlay.classList.remove('hidden');
+  document.getElementById('welcome-step1').style.display = '';
+  document.getElementById('welcome-step2').style.display = 'none';
+
+  // 既存グループをリスト表示する領域を取得
+  const groupList = document.getElementById('welcome-group-list');
+  if (groupList) {
+    groupList.innerHTML = '';
+    
+    const gs = loadGroups(); // 既存のグループ読み込み
+    if (gs.length > 0) {
+      const title = document.createElement('div');
+      title.className = 'sheet-label';
+      title.textContent = '登録済みのグループから選ぶ：';
+      title.style.margin = '15px 0 8px 0';
+      groupList.appendChild(title);
+
+      gs.forEach(g => {
+        const item = document.createElement('div');
+        item.className = 'welcome-list-item'; // CSSでスタイルを当ててください
+        item.style.padding = '10px';
+        item.style.border = '1px solid #ccc';
+        item.style.marginBottom = '5px';
+        item.style.cursor = 'pointer';
+        item.innerHTML = `<span>${esc(g.name)}</span>`;
+        
+        item.onclick = () => {
+          setCurrentGroupId(g.id);
+          renderWelcomeStep2(g); // 3番の関数を呼び出す
+        };
+        groupList.appendChild(item);
+      });
+    }
+  }
+}
+// ステップ2：選択したグループ内のユーザーを表示する関数
+function renderWelcomeStep2(group) {
+  const step1 = document.getElementById('welcome-step1');
+  const step2 = document.getElementById('welcome-step2');
+  if (!step1 || !step2) return;
+
+  step1.style.display = 'none';
+  step2.style.display = '';
+  
+  const titleEl = document.getElementById('wc-step2-title');
+  if (titleEl) titleEl.textContent = `「${group.name}」の誰ですか？`;
+
+  const userList = document.getElementById('welcome-user-list');
+  userList.innerHTML = '';
+
+  // そのグループに所属するユーザーを表示
+  const d = loadGroupData(); 
+  if (d && d.users) {
+    d.users.forEach(u => {
+      const item = document.createElement('div');
+      item.className = 'welcome-list-item';
+      item.style.padding = '10px';
+      item.style.border = '1px solid #ccc';
+      item.style.marginBottom = '5px';
+      item.textContent = u.name;
+      
+      item.onclick = () => {
+        setCurrentUserId(u.id); // 現在のユーザーに設定
+        setPinnedUserId(u.id);  // ★ここが重要！次回リロード用に保存
+        
+        document.getElementById('welcome-overlay').classList.add('hidden');
+        renderAll(); // 画面更新
+      };
+      userList.appendChild(item);
+    });
+  }
+}
 function hideWelcome(){document.getElementById('welcome-overlay').classList.add('hidden');}
 
 function renderWelcomeStep1(){
@@ -1951,6 +2027,30 @@ document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='visible'){renderAll();}
 });
 window.addEventListener('pageshow',e=>{if(e.persisted){renderAll();}});
+// ══ アプリ起動時の初期化 ══
+window.addEventListener('DOMContentLoaded', async () => {
+  ensureDefaultGroup(); // グループがない場合に作成
+  updateDateDisplay();
+
+  const savedGroupId = getCurrentGroupId();
+  const savedUserId = getPinnedUserId();
+
+  // すでにグループとユーザーが選択されている場合はメイン画面へ
+  if (savedGroupId && savedUserId) {
+    document.getElementById('welcome-overlay').classList.add('hidden');
+    
+    // GAS連携がある場合は同期を試みる
+    const cg = getCurrentGroup();
+    if (cg && cg.gasUrl) {
+      await syncFromRemote(true);
+    } else {
+      renderAll();
+    }
+  } else {
+    // データがない場合はウェルカム画面を表示
+    showWelcome();
+  }
+});
 </script>
 </body>
 </html>
