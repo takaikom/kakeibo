@@ -93,11 +93,6 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
 .bar-fill.over-bar{background:var(--red-mid);}
 .bar-fill.budget-bar{background:var(--check);}
 
-/* ── NUMBER INPUT: スピナー非表示 ── */
-input[type=number]::-webkit-inner-spin-button,
-input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
-input[type=number]{-moz-appearance:textfield;appearance:textfield;}
-
 /* ── ENTRY FORM ── */
 .entry-form{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:12px;}
 .type-toggle{display:flex;gap:6px;margin-bottom:14px;}
@@ -420,19 +415,6 @@ input[type=number]{-moz-appearance:textfield;appearance:textfield;}
 
 <!-- ══ SETTINGS TAB ══ -->
 <div id="tab-settings" class="tab-body" style="display:none;">
-  <div class="section-label">GAS連携（家族共有）</div>
-  <div class="settings-card" id="gas-settings-card">
-    <div class="settings-card-title">Google Apps Script URL</div>
-    <div class="setup-step"><div class="setup-num">1</div><div>Google スプレッドシートを作成し、拡張機能 → Apps Script を開く</div></div>
-    <div class="setup-step"><div class="setup-num">2</div><div>GASコード.js の内容を貼り付けて保存・デプロイ（ウェブアプリ）</div></div>
-    <div class="setup-step"><div class="setup-num">3</div><div>デプロイURLを下に貼り付けて「保存」</div></div>
-    <input class="url-input" id="gas-url-input" placeholder="https://script.google.com/macros/s/.../exec">
-    <div style="display:flex;gap:8px;">
-      <button class="blue-btn" style="flex:1;" id="gas-save-btn">保存</button>
-      <button class="secondary-btn" id="gas-sync-btn">今すぐ同期</button>
-    </div>
-    <div class="sync-status-text" id="gas-status-text">未設定</div>
-  </div>
   <div class="section-label">支出カテゴリ</div>
   <div class="settings-card">
     <div class="cat-chip-list" id="expense-cat-chips"></div>
@@ -473,6 +455,19 @@ input[type=number]{-moz-appearance:textfield;appearance:textfield;}
     <hr class="sheet-divider">
     <button class="danger-btn" onclick="clearUser()">🗑 このユーザーのデータを削除</button>
   </div>
+  <div class="section-label">GAS連携（家族共有）</div>
+  <div class="settings-card" id="gas-settings-card">
+    <div class="settings-card-title">Google Apps Script URL</div>
+    <div class="setup-step"><div class="setup-num">1</div><div>Google スプレッドシートを作成し、拡張機能 → Apps Script を開く</div></div>
+    <div class="setup-step"><div class="setup-num">2</div><div>GASコード.js の内容を貼り付けて保存・デプロイ（ウェブアプリ）</div></div>
+    <div class="setup-step"><div class="setup-num">3</div><div>デプロイURLを下に貼り付けて「保存」</div></div>
+    <input class="url-input" id="gas-url-input" placeholder="https://script.google.com/macros/s/.../exec">
+    <div style="display:flex;gap:8px;">
+      <button class="blue-btn" style="flex:1;" id="gas-save-btn">保存</button>
+      <button class="secondary-btn" id="gas-sync-btn">今すぐ同期</button>
+    </div>
+    <div class="sync-status-text" id="gas-status-text">未設定</div>
+  </div>
 </div>
 
 <!-- ══ MENU SHEET ══ -->
@@ -481,44 +476,65 @@ input[type=number]{-moz-appearance:textfield;appearance:textfield;}
     <div class="sheet-scroll">
       <div class="sheet-handle"></div>
       <div class="sheet-title">メニュー</div>
-      <!-- 親モード -->
-      <div style="background:var(--surface2);border-radius:12px;padding:10px 16px;margin-bottom:8px;">
-        <div class="parent-mode-wrap">
-          <span class="parent-mode-label">👨‍👩‍👧 親モード（全員切り替え）</span>
-          <label style="position:relative;width:44px;height:26px;cursor:pointer;display:inline-block;">
-            <input type="checkbox" id="parent-mode-toggle" style="position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer;z-index:1;">
-            <span id="parent-mode-track" style="position:absolute;inset:0;background:var(--border2);border-radius:99px;transition:background .2s;pointer-events:none;"></span>
-          </label>
+      <!-- 親モードトグル -->
+      <div style="display:flex;align-items:center;justify-content:space-between;width:100%;padding:14px 16px;border-radius:12px;border:1px solid var(--border);background:var(--surface);margin-bottom:8px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div class="menu-icon" style="background:var(--green-light);">👨‍👩‍👧</div>
+          <div><div style="font-size:14px;font-weight:500;color:var(--text);">全員を表示する（親モード）</div><div class="menu-item-desc">ONにすると全員のタブを確認できます</div></div>
         </div>
+        <label style="position:relative;width:44px;height:26px;flex-shrink:0;display:block;cursor:pointer;">
+          <input type="checkbox" id="parent-mode-toggle" style="position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer;z-index:1;">
+          <span id="parent-mode-track" style="position:absolute;inset:0;background:var(--border2);border-radius:99px;transition:background .2s;pointer-events:none;"></span>
+        </label>
       </div>
-      <button class="menu-item" id="menu-switch-user-btn">
-        <div class="menu-icon" style="background:var(--blue-light);">🔄</div>
-        <div><div>ユーザーを切り替える</div><div class="menu-item-desc">別のユーザーとして使う</div></div>
+      <!-- グループ設定 -->
+      <button class="menu-item" id="menu-rename-group-btn">
+        <div class="menu-icon" style="background:var(--blue-light);">✏️</div>
+        <div><div id="menu-rename-group-label">グループ名を変更</div><div class="menu-item-desc" id="menu-group-name-desc"></div></div>
       </button>
       <button class="menu-item" id="menu-sync-btn">
         <div class="menu-icon" style="background:var(--blue-light);">🔄</div>
         <div><div>今すぐ同期</div><div class="menu-item-desc" id="menu-sync-desc">GASと手動で同期します</div></div>
       </button>
+      <button class="menu-item" id="menu-delete-group-btn">
+        <div class="menu-icon" style="background:var(--red-light);">🗑️</div>
+        <div><div id="menu-delete-group-label">このグループを削除</div><div class="menu-item-desc">一時削除（復元可能）</div></div>
+      </button>
       <hr class="sheet-divider">
-      <button class="menu-item" onclick="closeMenu();switchTab('home')">
-        <div class="menu-icon" style="background:var(--accent-light);">🏠</div>
-        <div><div>ホーム</div><div class="menu-item-desc">今月の収支・入力フォーム</div></div>
+      <!-- ユーザー設定 -->
+      <button class="menu-item" id="menu-switch-user-btn">
+        <div class="menu-icon" style="background:var(--blue-light);">🔄</div>
+        <div><div>ユーザーを切り替える</div><div class="menu-item-desc">別のユーザーとして使う（ピン変更）</div></div>
       </button>
-      <button class="menu-item" onclick="closeMenu();switchTab('list')">
-        <div class="menu-icon" style="background:var(--blue-light);">📋</div>
-        <div><div>明細一覧</div><div class="menu-item-desc">期間別に取引を確認</div></div>
+      <button class="menu-item" id="menu-rename-user-btn">
+        <div class="menu-icon" style="background:var(--accent-light);">👤</div>
+        <div><div id="menu-rename-user-label">名前を変更</div><div class="menu-item-desc">このユーザーの名前を変更</div></div>
       </button>
-      <button class="menu-item" onclick="closeMenu();switchTab('agg')">
-        <div class="menu-icon" style="background:var(--green-light);">📊</div>
-        <div><div>集計</div><div class="menu-item-desc">月別・年別・カテゴリ別</div></div>
+      <button class="menu-item" id="menu-delete-user-btn">
+        <div class="menu-icon" style="background:var(--red-light);">🗑️</div>
+        <div><div>このユーザーを削除</div><div class="menu-item-desc">一時削除（復元可能）</div></div>
       </button>
-      <button class="menu-item" onclick="closeMenu();switchTab('ledger')">
-        <div class="menu-icon" style="background:var(--amber-light);">📒</div>
-        <div><div>仕訳帳</div><div class="menu-item-desc">複式簿記形式で確認</div></div>
+      <button class="menu-item" id="menu-deleted-users-btn">
+        <div class="menu-icon" style="background:var(--amber-light);">👤</div>
+        <div><div>削除したユーザー <span id="menu-deleted-users-badge" style="display:none;background:var(--amber);color:white;border-radius:99px;font-size:11px;padding:1px 7px;margin-left:4px;"></span></div><div class="menu-item-desc">一時削除したユーザーを復元</div></div>
       </button>
-      <button class="menu-item" onclick="closeMenu();switchTab('settings')">
-        <div class="menu-icon" style="background:var(--surface2);">⚙️</div>
-        <div><div>設定</div><div class="menu-item-desc">GAS・カテゴリ・予算</div></div>
+      <button class="menu-item" id="menu-deleted-groups-btn">
+        <div class="menu-icon" style="background:var(--purple-light);">📂</div>
+        <div><div>削除したグループ <span id="menu-deleted-groups-badge" style="display:none;background:var(--purple);color:white;border-radius:99px;font-size:11px;padding:1px 7px;margin-left:4px;"></span></div><div class="menu-item-desc">一時削除したグループを復元</div></div>
+      </button>
+      <hr class="sheet-divider">
+      <!-- データ操作 -->
+      <button class="menu-item" id="menu-export-btn">
+        <div class="menu-icon" style="background:var(--accent-light);">📄</div>
+        <div><div>CSVエクスポート</div><div class="menu-item-desc">現在のユーザーの取引データ</div></div>
+      </button>
+      <button class="menu-item" id="menu-backup-btn">
+        <div class="menu-icon" style="background:var(--green-light);">💾</div>
+        <div><div>JSONバックアップ</div><div class="menu-item-desc">グループ全データをJSON保存</div></div>
+      </button>
+      <button class="menu-item" id="menu-import-btn">
+        <div class="menu-icon" style="background:var(--amber-light);">📂</div>
+        <div><div>インポート</div><div class="menu-item-desc">JSONバックアップから復元</div></div>
       </button>
     </div>
     <div class="sheet-footer">
@@ -526,6 +542,7 @@ input[type=number]{-moz-appearance:textfield;appearance:textfield;}
     </div>
   </div>
 </div>
+<input type="file" id="menu-import-file" accept=".json" style="display:none" onchange="importJSON(event)">
 
 <!-- ══ EDIT SHEET ══ -->
 <div class="sheet-overlay" id="edit-sheet">
@@ -1554,19 +1571,245 @@ function clearUser(){
 // ════════════════════════════════════════
 // MENU
 // ════════════════════════════════════════
-document.getElementById('menu-btn').addEventListener('click',()=>{document.getElementById('menu-sheet').classList.add('open');});
+const DELETED_GROUPS_KEY='kb_deleted_groups';
+function loadDeletedGroups(){try{return JSON.parse(localStorage.getItem(DELETED_GROUPS_KEY)||'[]');}catch{return[];}}
+function saveDeletedGroups(dg){localStorage.setItem(DELETED_GROUPS_KEY,JSON.stringify(dg));}
+
+document.getElementById('menu-btn').addEventListener('click',()=>{
+  const cg=getCurrentGroup();
+  if(cg){
+    document.getElementById('menu-group-name-desc').textContent=cg.name;
+    const cu=getCurrentUser();
+    document.getElementById('menu-rename-user-label').textContent=`「${cu.name}」の名前を変更`;
+  }
+  // 削除済みバッジ更新
+  const du=(loadGroupData().deletedUsers||[]).length;
+  const dub=document.getElementById('menu-deleted-users-badge');
+  dub.style.display=du?'':'none';dub.textContent=du;
+  const dg=loadDeletedGroups().length;
+  const dgb=document.getElementById('menu-deleted-groups-badge');
+  dgb.style.display=dg?'':'none';dgb.textContent=dg;
+  document.getElementById('menu-sheet').classList.add('open');
+});
 function closeMenu(){document.getElementById('menu-sheet').classList.remove('open');}
 document.getElementById('menu-sheet').addEventListener('click',e=>{if(e.target.id==='menu-sheet')closeMenu();});
 document.getElementById('menu-close-btn').addEventListener('click',closeMenu);
+
+// 今すぐ同期
 document.getElementById('menu-sync-btn').addEventListener('click',async()=>{
   closeMenu();
   if(!getGroupGasUrl()){showToast('⚠ GAS URLが設定されていません');return;}
   await syncFromRemote(false);
 });
+
+// ユーザー切り替え
 document.getElementById('menu-switch-user-btn').addEventListener('click',()=>{
   closeMenu();showWelcome();
   const cg=getCurrentGroup();if(cg)renderWelcomeStep2(cg);
 });
+
+// グループ名変更
+document.getElementById('menu-rename-group-btn').addEventListener('click',()=>{
+  closeMenu();
+  const cg=getCurrentGroup();if(!cg)return;
+  const ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:300;display:flex;align-items:flex-end;justify-content:center;';
+  ov.innerHTML=`<div style="background:var(--surface);border-radius:20px 20px 0 0;padding:24px 20px calc(24px + env(safe-area-inset-bottom));width:100%;max-width:480px;animation:slideUp .22s cubic-bezier(.22,1,.36,1);">
+    <div style="font-size:15px;font-weight:700;margin-bottom:16px;">グループ名を変更</div>
+    <div style="display:flex;gap:8px;">
+      <input id="_rgi" type="text" maxlength="20" style="flex:1;height:44px;border:1.5px solid var(--blue);border-radius:12px;padding:0 14px;font-family:inherit;font-size:14px;color:var(--text);background:white;outline:none;" value="${esc(cg.name)}">
+      <button id="_rgo" style="height:44px;padding:0 18px;border-radius:12px;border:none;background:var(--blue);color:white;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;">保存</button>
+    </div>
+    <button id="_rgc" style="width:100%;margin-top:10px;height:40px;border-radius:12px;border:none;background:var(--surface2);color:var(--text2);font-family:inherit;font-size:14px;cursor:pointer;">キャンセル</button>
+  </div>`;
+  document.body.appendChild(ov);
+  const inp=ov.querySelector('#_rgi');setTimeout(()=>{inp.focus();inp.select();},50);
+  const doSave=async()=>{
+    const name=inp.value.trim();if(!name||name===cg.name){ov.remove();return;}
+    const gs=loadGroups();const g=gs.find(g=>g.id===cg.id);if(g){g.name=name;saveGroups(gs);}
+    if(getGroupGasUrl()){const local=loadGroupData();remoteSave({...local,groupName:name}).then(ok=>{if(!ok)setSyncDot('err');});}
+    ov.remove();renderAll();showToast(`✅ グループ名を「${name}」に変更しました`);
+  };
+  ov.querySelector('#_rgo').addEventListener('click',doSave);
+  inp.addEventListener('keydown',e=>{if(e.key==='Enter')doSave();if(e.key==='Escape')ov.remove();});
+  ov.querySelector('#_rgc').addEventListener('click',()=>ov.remove());
+  ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
+});
+
+// グループ削除
+document.getElementById('menu-delete-group-btn').addEventListener('click',()=>{
+  closeMenu();
+  const cg=getCurrentGroup();if(!cg)return;
+  const ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:300;display:flex;align-items:flex-end;justify-content:center;';
+  ov.innerHTML=`<div style="background:var(--surface);border-radius:20px 20px 0 0;padding:24px 20px calc(24px + env(safe-area-inset-bottom));width:100%;max-width:480px;animation:slideUp .22s cubic-bezier(.22,1,.36,1);">
+    <div style="font-size:15px;font-weight:700;margin-bottom:8px;">「${esc(cg.name)}」を削除しますか？</div>
+    <div style="font-size:13px;color:var(--text3);margin-bottom:20px;">グループ内のデータはこのデバイスに保持されます。一時削除なら後で復元できます。</div>
+    <button id="_dgs" style="width:100%;height:44px;border-radius:12px;border:none;background:var(--accent);color:white;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px;">一時削除（復元可能）</button>
+    <button id="_dgh" style="width:100%;height:44px;border-radius:12px;border:1px solid var(--red-mid);background:var(--red-light);color:var(--red-mid);font-family:inherit;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px;">完全削除（元に戻せません）</button>
+    <button id="_dgc" style="width:100%;height:40px;border-radius:12px;border:none;background:var(--surface2);color:var(--text2);font-family:inherit;font-size:14px;cursor:pointer;">キャンセル</button>
+  </div>`;
+  document.body.appendChild(ov);
+  const switchToRemaining=()=>{
+    const remaining=loadGroups();
+    if(remaining.length){setCurrentGroupId(remaining[0].id);}
+    else{const nid='g_default_'+Date.now();saveGroups([{id:nid,name:'マイグループ',gasUrl:''}]);setCurrentGroupId(nid);}
+    renderAll();
+  };
+  ov.querySelector('#_dgs').addEventListener('click',()=>{
+    const gs=loadGroups();const idx=gs.findIndex(g=>g.id===cg.id);
+    if(idx!==-1){gs.splice(idx,1);saveGroups(gs);}
+    const dg=loadDeletedGroups();dg.push({...cg,deletedAt:new Date().toLocaleDateString('ja-JP')});saveDeletedGroups(dg);
+    ov.remove();switchToRemaining();showToast(`「${cg.name}」を一時削除しました（復元可能）`);
+  });
+  ov.querySelector('#_dgh').addEventListener('click',()=>{
+    const gs=loadGroups();const idx=gs.findIndex(g=>g.id===cg.id);
+    if(idx!==-1){gs.splice(idx,1);saveGroups(gs);}
+    localStorage.removeItem(GROUP_DATA_K+'_'+cg.id);
+    ov.remove();switchToRemaining();showToast(`「${cg.name}」を完全削除しました`);
+  });
+  ov.querySelector('#_dgc').addEventListener('click',()=>ov.remove());
+  ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
+});
+
+// 削除したグループ復元
+document.getElementById('menu-deleted-groups-btn').addEventListener('click',()=>{
+  closeMenu();
+  const deleted=loadDeletedGroups();
+  const ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:300;display:flex;align-items:flex-end;justify-content:center;';
+  const listHtml=deleted.length
+    ? deleted.map((g,i)=>`<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:12px;border:1px solid var(--border);background:var(--surface);margin-bottom:8px;">
+        <div style="flex:1;"><div style="font-size:14px;font-weight:500;">${esc(g.name)}</div><div style="font-size:11px;color:var(--text3);">削除日：${g.deletedAt||'不明'}${g.gasUrl?' 🔗 共有あり':''}</div></div>
+        <button data-idx="${i}" class="_rg-btn" style="padding:6px 12px;border-radius:8px;border:1px solid var(--blue);background:var(--blue-light);color:var(--blue);font-family:inherit;font-size:13px;font-weight:500;cursor:pointer;">復元</button>
+        <button data-idx="${i}" class="_pg-btn" style="padding:6px 12px;border-radius:8px;border:1px solid var(--red-mid);background:var(--red-light);color:var(--red-mid);font-family:inherit;font-size:13px;font-weight:500;cursor:pointer;">完全削除</button>
+      </div>`).join('')
+    : '<div style="text-align:center;padding:20px;color:var(--text3);font-size:14px;">一時削除されたグループはありません</div>';
+  ov.innerHTML=`<div style="background:var(--surface);border-radius:20px 20px 0 0;padding:24px 20px calc(24px + env(safe-area-inset-bottom));width:100%;max-width:480px;max-height:80vh;overflow-y:auto;animation:slideUp .24s cubic-bezier(.22,1,.36,1);">
+    <div style="font-size:15px;font-weight:700;margin-bottom:16px;">削除したグループ</div>
+    ${listHtml}
+    <button id="_dgg-close" style="width:100%;height:40px;border-radius:12px;border:none;background:var(--surface2);color:var(--text2);font-family:inherit;font-size:14px;cursor:pointer;margin-top:4px;">閉じる</button>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.querySelectorAll('._rg-btn').forEach(btn=>btn.addEventListener('click',()=>{
+    const idx=parseInt(btn.dataset.idx);const dg=loadDeletedGroups();
+    const g=dg.splice(idx,1)[0];delete g.deletedAt;
+    const gs=loadGroups();gs.push(g);saveGroups(gs);saveDeletedGroups(dg);
+    ov.remove();renderGroupTabs();showToast(`✅「${g.name}」を復元しました`);
+  }));
+  ov.querySelectorAll('._pg-btn').forEach(btn=>btn.addEventListener('click',()=>{
+    const idx=parseInt(btn.dataset.idx);const dg=loadDeletedGroups();
+    const g=dg.splice(idx,1)[0];saveDeletedGroups(dg);
+    localStorage.removeItem(GROUP_DATA_K+'_'+g.id);
+    ov.remove();showToast(`「${g.name}」を完全削除しました`);
+  }));
+  ov.querySelector('#_dgg-close').addEventListener('click',()=>ov.remove());
+  ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
+});
+
+// ユーザー名変更
+document.getElementById('menu-rename-user-btn').addEventListener('click',()=>{
+  closeMenu();
+  const cu=getCurrentUser();
+  const ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:300;display:flex;align-items:flex-end;justify-content:center;';
+  ov.innerHTML=`<div style="background:var(--surface);border-radius:20px 20px 0 0;padding:24px 20px calc(24px + env(safe-area-inset-bottom));width:100%;max-width:480px;animation:slideUp .22s cubic-bezier(.22,1,.36,1);">
+    <div style="font-size:15px;font-weight:700;margin-bottom:16px;">名前を変更</div>
+    <div style="display:flex;gap:8px;">
+      <input id="_rui" type="text" maxlength="20" style="flex:1;height:44px;border:1.5px solid var(--accent);border-radius:12px;padding:0 14px;font-family:inherit;font-size:14px;color:var(--text);background:white;outline:none;" value="${esc(cu.name)}">
+      <button id="_ruo" style="height:44px;padding:0 18px;border-radius:12px;border:none;background:var(--accent);color:white;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;">保存</button>
+    </div>
+    <button id="_ruc" style="width:100%;margin-top:10px;height:40px;border-radius:12px;border:none;background:var(--surface2);color:var(--text2);font-family:inherit;font-size:14px;cursor:pointer;">キャンセル</button>
+  </div>`;
+  document.body.appendChild(ov);
+  const inp=ov.querySelector('#_rui');setTimeout(()=>{inp.focus();inp.select();},50);
+  const doSave=()=>{
+    const name=inp.value.trim();if(!name||name===cu.name){ov.remove();return;}
+    const d=loadGroupData();const u=d.users.find(u=>u.id===cu.id);
+    if(u){u.name=name;saveGroupData(d);saveData();}
+    ov.remove();renderAll();showToast(`✅「${name}」に変更しました`);
+  };
+  ov.querySelector('#_ruo').addEventListener('click',doSave);
+  inp.addEventListener('keydown',e=>{if(e.key==='Enter')doSave();if(e.key==='Escape')ov.remove();});
+  ov.querySelector('#_ruc').addEventListener('click',()=>ov.remove());
+  ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
+});
+
+// ユーザー削除
+document.getElementById('menu-delete-user-btn').addEventListener('click',()=>{
+  closeMenu();
+  const cu=getCurrentUser();const targetId=cu.id;const targetName=cu.name;
+  const ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:300;display:flex;align-items:flex-end;justify-content:center;';
+  ov.innerHTML=`<div style="background:var(--surface);border-radius:20px 20px 0 0;padding:24px 20px calc(24px + env(safe-area-inset-bottom));width:100%;max-width:480px;animation:slideUp .22s cubic-bezier(.22,1,.36,1);">
+    <div style="font-size:15px;font-weight:700;margin-bottom:6px;">「${esc(targetName)}」を削除</div>
+    <div style="font-size:13px;color:var(--text3);margin-bottom:20px;">一時削除した場合はメニューの「削除したユーザー」から復元できます。</div>
+    <button id="_dus" style="width:100%;height:44px;border-radius:12px;border:none;background:var(--amber);color:white;font-family:inherit;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:8px;">一時削除（復元可能）</button>
+    <button id="_duh" style="width:100%;height:44px;border-radius:12px;border:1px solid var(--red-mid);background:var(--red-light);color:var(--red-mid);font-family:inherit;font-size:15px;font-weight:700;cursor:pointer;margin-bottom:10px;">完全削除（取り消し不可）</button>
+    <button id="_duc" style="width:100%;height:40px;border-radius:12px;border:none;background:var(--surface2);color:var(--text2);font-family:inherit;font-size:14px;cursor:pointer;">キャンセル</button>
+  </div>`;
+  document.body.appendChild(ov);
+  const doDelete=(soft)=>{
+    const d=loadGroupData();const idx=d.users.findIndex(u=>u.id===targetId);
+    if(idx===-1){showToast('❌ ユーザーが見つかりません');ov.remove();return;}
+    const deleted=d.users.splice(idx,1)[0];
+    if(soft){deleted.deletedAt=new Date().toLocaleDateString('ja-JP');if(!d.deletedUsers)d.deletedUsers=[];d.deletedUsers.push(deleted);}
+    if(!d.users.length){const uid='u'+Date.now();d.users=[newUser(uid,'わたし',false)];setCurrentUserId(uid);}
+    else{setCurrentUserId(d.users[0].id);}
+    if(getPinnedUserId()===targetId)setPinnedUserId('');
+    saveGroupData(d);saveData();ov.remove();renderAll();
+    showToast(soft?`「${targetName}」を一時削除しました（復元可能）`:`「${targetName}」を完全削除しました`);
+  };
+  ov.querySelector('#_dus').addEventListener('click',()=>doDelete(true));
+  ov.querySelector('#_duh').addEventListener('click',()=>doDelete(false));
+  ov.querySelector('#_duc').addEventListener('click',()=>ov.remove());
+  ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
+});
+
+// 削除したユーザー復元
+document.getElementById('menu-deleted-users-btn').addEventListener('click',()=>{
+  closeMenu();
+  const d=loadGroupData();const deleted=d.deletedUsers||[];
+  const ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:300;display:flex;align-items:flex-end;justify-content:center;';
+  const listHtml=deleted.length
+    ? deleted.map((u,i)=>`<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:12px;border:1px solid var(--border);background:var(--surface);margin-bottom:8px;">
+        <div style="flex:1;"><div style="font-size:14px;font-weight:500;">${esc(u.name)}</div><div style="font-size:11px;color:var(--text3);">取引${(u.transactions||[]).length}件・削除日:${u.deletedAt||'不明'}</div></div>
+        <button data-idx="${i}" class="_ru-btn" style="padding:6px 14px;border-radius:8px;border:1px solid var(--blue);background:var(--blue-light);color:var(--blue);font-family:inherit;font-size:13px;font-weight:500;cursor:pointer;">復元</button>
+        <button data-idx="${i}" class="_pu-btn" style="padding:6px 14px;border-radius:8px;border:1px solid var(--red-mid);background:var(--red-light);color:var(--red-mid);font-family:inherit;font-size:13px;font-weight:500;cursor:pointer;">完全削除</button>
+      </div>`).join('')
+    : '<div style="text-align:center;padding:20px;color:var(--text3);font-size:14px;">一時削除されたユーザーはいません</div>';
+  ov.innerHTML=`<div style="background:var(--surface);border-radius:20px 20px 0 0;padding:24px 20px calc(24px + env(safe-area-inset-bottom));width:100%;max-width:480px;max-height:80vh;overflow-y:auto;animation:slideUp .24s cubic-bezier(.22,1,.36,1);">
+    <div style="font-size:15px;font-weight:700;margin-bottom:16px;">削除したユーザー</div>
+    ${listHtml}
+    <button id="_duu-close" style="width:100%;height:40px;border-radius:12px;border:none;background:var(--surface2);color:var(--text2);font-family:inherit;font-size:14px;cursor:pointer;margin-top:4px;">閉じる</button>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.querySelectorAll('._ru-btn').forEach(btn=>btn.addEventListener('click',()=>{
+    const idx=parseInt(btn.dataset.idx);const d2=loadGroupData();
+    if(!d2.deletedUsers)d2.deletedUsers=[];
+    const u=d2.deletedUsers.splice(idx,1)[0];delete u.deletedAt;
+    d2.users.push(u);saveGroupData(d2);saveData();
+    ov.remove();renderAll();showToast(`✅「${u.name}」を復元しました`);
+  }));
+  ov.querySelectorAll('._pu-btn').forEach(btn=>btn.addEventListener('click',()=>{
+    const idx=parseInt(btn.dataset.idx);const d2=loadGroupData();
+    if(!d2.deletedUsers)d2.deletedUsers=[];
+    const u=d2.deletedUsers.splice(idx,1)[0];saveGroupData(d2);
+    ov.remove();showToast(`「${u.name}」を完全削除しました`);
+  }));
+  ov.querySelector('#_duu-close').addEventListener('click',()=>ov.remove());
+  ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
+});
+
+// CSVエクスポート
+document.getElementById('menu-export-btn').addEventListener('click',()=>{closeMenu();exportCSV();});
+
+// JSONバックアップ
+document.getElementById('menu-backup-btn').addEventListener('click',()=>{closeMenu();exportJSON();});
+
+// インポート
+document.getElementById('menu-import-btn').addEventListener('click',()=>{closeMenu();document.getElementById('menu-import-file').click();});
 
 // ════════════════════════════════════════
 // GAS SETTINGS BUTTONS
