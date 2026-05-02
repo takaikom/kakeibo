@@ -151,9 +151,68 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
 .act-btn.edit:active{opacity:.7;}
 
 /* ── AGG ── */
-.period-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
-.period-nav-btn{width:36px;height:36px;border-radius:10px;border:1.5px solid var(--border2);background:var(--surface);color:var(--text2);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;}
-.period-nav-btn:active{background:var(--surface2);}
+/* 親要素：左右のボタンを端に寄せる */
+.period-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  position: relative;
+  /* 高さをボタンに合わせる */
+  min-height: 36px; 
+}
+
+.period-nav-btn {
+  /* サイズを固定 */
+  width: 36px !important;
+  min-width: 36px !important;
+  height: 36px !important;
+  
+  border-radius: 10px;
+  border: 1.5px solid var(--border2);
+  background: var(--surface);
+  color: var(--text2);
+  cursor: pointer;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+  padding: 0; /* 余計なパディングを排除 */
+}
+
+.period-center-group {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  z-index: 1;
+}
+
+.period-label {
+  font-size: 18px;
+  font-weight: bold;
+  margin: 0;
+}
+
+.today-btn {
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: bold;
+  color: #c46243;
+  background: white;
+  border: 1px solid #d8b1a4;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.period-nav-btn {
+  z-index: 2; /* 左右ボタンを前面に */
+}
 .period-label{font-size:15px;font-weight:700;font-family:'DM Mono',monospace;}
 .toggle-group{display:flex;gap:6px;margin-bottom:14px;}
 .toggle-btn{flex:1;height:36px;border-radius:10px;border:1.5px solid var(--border2);background:var(--surface);color:var(--text2);font-family:'Noto Sans JP',sans-serif;font-size:13px;font-weight:500;cursor:pointer;transition:all .15s;}
@@ -178,8 +237,8 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
 
 /* ── LEDGER ── */
 .ledger-table{background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:12px;}
-.ledger-head{display:grid;grid-template-columns:1fr auto auto auto;gap:0;background:var(--surface2);padding:8px 14px;font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text3);}
-.ledger-row{display:grid;grid-template-columns:1fr auto auto auto;gap:0;padding:10px 14px;border-top:1px solid var(--border);font-size:12px;align-items:start;}
+.ledger-head{display:grid;grid-template-columns:1fr 80px 80px 80px;gap:0;background:var(--surface2);padding:8px 14px;font-size:11px;font-weight:700;letter-spacing:.5px;color:var(--text3);}
+.ledger-row{display:grid;grid-template-columns:1fr 80px 80px 80px;gap:0;padding:10px 14px;border-top:1px solid var(--border);font-size:12px;align-items:start;}
 .ledger-row.income-row{border-left:3px solid var(--income-color);}
 .ledger-row.expense-row{border-left:3px solid var(--expense-color);}
 .ledger-cell{padding:0 4px;}
@@ -188,7 +247,8 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
 .ledger-cell.credit{color:var(--income-color);}
 .ledger-acc{font-weight:500;color:var(--text);}
 .ledger-acc-sub{font-size:10px;color:var(--text3);margin-top:1px;}
-.ledger-total{display:grid;grid-template-columns:1fr auto auto auto;gap:0;padding:10px 14px;border-top:2px solid var(--border2);background:var(--surface2);font-size:12px;font-weight:700;}
+.ledger-total{display:grid;grid-template-columns:1fr 80px 80px 80px;gap:0;padding:10px 14px;border-top:2px solid var(--border2);background:var(--surface2);font-size:12px;font-weight:700;}
+.ledger-total-label{font-size:9px;font-weight:400;color:var(--text3);display:block;margin-top:2px;font-family:'Noto Sans JP',sans-serif;}
 
 /* ── SETTINGS ── */
 .settings-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:12px;}
@@ -364,6 +424,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
     <div class="amount-row">
       <span class="amount-prefix">¥</span>
       <input class="amount-input" id="entry-amount" type="number" min="0" placeholder="0" inputmode="numeric">
+      <button class="submit-btn" id="entry-submit-btn" onclick="submitEntry()" style="width:72px;height:50px;font-size:14px;margin-top:0;flex-shrink:0;border-radius:12px;">登録</button>
     </div>
     <div class="tax-row" id="entry-tax-row">
       <label class="tax-checkbox-label">
@@ -389,7 +450,13 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
     </div>
     <div class="form-label">メモ</div>
     <textarea class="memo-input" id="entry-memo" placeholder="メモ（任意）" maxlength="100"></textarea>
-    <button class="submit-btn" id="entry-submit-btn" onclick="submitEntry()">登録</button>
+    <div class="form-label" id="entry-account-label" style="margin-top:10px;">相手勘定科目（仕訳用）</div>
+    <div id="entry-account-row" style="display:flex;gap:6px;margin-bottom:4px;">
+      <div class="cat-picker" id="entry-account-picker" style="flex:1;flex-wrap:wrap;gap:6px;margin-bottom:0;"></div>
+    </div>
+    <div style="margin-bottom:4px;">
+      <input class="form-input" id="entry-account-custom" type="text" placeholder="または直接入力（例：普通預金、現金）" maxlength="20" style="width:100%;" oninput="onEntryAccountCustomInput(this.value)">
+    </div>
   </div>
   <div class="section-label">最近の取引</div>
   <div id="home-recent"></div>
@@ -402,9 +469,13 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
     <button class="toggle-btn" data-lmode="year" onclick="setListMode('year')">年</button>
     <button class="toggle-btn" data-lmode="all" onclick="setListMode('all')">全期間</button>
   </div>
-  <div class="period-nav" id="list-period-nav">
+<!-- 【明細タブ】 -->
+  <div class="period-nav">
     <button class="period-nav-btn" onclick="navPeriod(-1)">‹</button>
-    <span class="period-label" id="list-period-label">—</span>
+    <div class="period-center-group">
+      <span class="period-label" id="list-period-label"></span>
+      <button class="today-btn" onclick="jumpToCurrentMonth('list')">今月</button>
+    </div>
     <button class="period-nav-btn" onclick="navPeriod(1)">›</button>
   </div>
   <div class="summary-row" id="list-summary"></div>
@@ -427,9 +498,13 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
     <button class="toggle-btn active" data-ldmode="month" onclick="setLedgerMode('month')">月次</button>
     <button class="toggle-btn" data-ldmode="year" onclick="setLedgerMode('year')">年次</button>
   </div>
+  <!-- 【仕訳タブ】 -->
   <div class="period-nav">
     <button class="period-nav-btn" onclick="navLedgerPeriod(-1)">‹</button>
-    <span class="period-label" id="ledger-period-label">—</span>
+    <div class="period-center-group">
+      <span class="period-label" id="ledger-period-label"></span>
+      <button class="today-btn" onclick="jumpToCurrentMonth('ledger')">今月</button>
+    </div>
     <button class="period-nav-btn" onclick="navLedgerPeriod(1)">›</button>
   </div>
   <div id="ledger-content"></div>
@@ -709,6 +784,11 @@ function getIncomeCats(){return getCurrentUser().incomeCats||DEFAULT_INCOME_CATS
 function getUserBudgets(){const u=getCurrentUser();return{budgets:u.budgets||{},totalBudget:u.totalBudget||0,budgetDisplayItems:u.budgetDisplayItems||null};}
 function getUserTaxRates(){const u=getCurrentUser();return{taxRates:u.taxRates||{},defaultTaxRate:u.defaultTaxRate!=null?u.defaultTaxRate:10};}
 function getTaxRateForCat(cat){const{taxRates,defaultTaxRate}=getUserTaxRates();return taxRates[cat]!=null?taxRates[cat]:defaultTaxRate;}
+
+// 相手勘定科目の選択肢
+const DEFAULT_EXPENSE_ACCOUNTS=['現金','普通預金','当座預金','電子マネー','クレジットカード'];
+const DEFAULT_INCOME_ACCOUNTS=['現金','普通預金','当座預金','電子マネー'];
+let entrySelectedAccount='';
 
 function mutateUser(fn){
   const d=loadGroupData();
@@ -994,12 +1074,43 @@ let entryType='expense';
 let entrySelectedCat='';
 
 function setEntryType(type){
-  entryType=type;entrySelectedCat='';
+  entryType=type;entrySelectedCat='';entrySelectedAccount='';
   document.getElementById('type-expense').classList.toggle('active',type==='expense');
   document.getElementById('type-income').classList.toggle('active',type==='income');
   const picker=document.getElementById('entry-cat-picker');
   picker.className='cat-picker '+(type==='expense'?'expense-cat':'income-cat');
+  const accCustom=document.getElementById('entry-account-custom');
+  if(accCustom)accCustom.value='';
   renderEntryCatPicker();
+}
+
+function renderEntryAccountPicker(){
+  const accounts=entryType==='expense'?DEFAULT_EXPENSE_ACCOUNTS:DEFAULT_INCOME_ACCOUNTS;
+  const picker=document.getElementById('entry-account-picker');
+  if(!picker)return;
+  picker.innerHTML=accounts.map(a=>
+    `<button class="cat-pick-btn${entrySelectedAccount===a?' selected':''}" style="font-size:12px;padding:5px 10px;" onclick="selectEntryAccount('${esc(a)}')">${esc(a)}</button>`
+  ).join('');
+}
+
+function selectEntryAccount(acc){
+  entrySelectedAccount=acc;
+  const customInput=document.getElementById('entry-account-custom');
+  if(customInput)customInput.value='';
+  renderEntryAccountPicker();
+}
+
+function onEntryAccountCustomInput(val){
+  if(val.trim()){entrySelectedAccount='__custom_acc__';}
+  else{entrySelectedAccount='';}
+  renderEntryAccountPicker();
+}
+
+function getEffectiveEntryAccount(){
+  if(entrySelectedAccount==='__custom_acc__'){
+    return document.getElementById('entry-account-custom')?.value.trim()||'現金・預金';
+  }
+  return entrySelectedAccount||'現金・預金';
 }
 
 function renderEntryCatPicker(){
@@ -1012,6 +1123,7 @@ function renderEntryCatPicker(){
   const taxRow=document.getElementById('entry-tax-row');
   if(taxRow)taxRow.style.display=entryType==='expense'?'':'none';
   updateTaxPreview();
+  renderEntryAccountPicker();
 }
 
 function selectEntryCat(cat){
@@ -1060,6 +1172,24 @@ function updateTaxPreview(){
   }
 }
 
+// 金額入力欄でEnterキーが押されたら登録を実行
+document.getElementById('entry-amount').addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    submitEntry();
+  }
+});
+
+// 初期状態の相手勘定を「現金」に設定する処理を renderEntryCatPicker に追記
+const originalRenderEntryCatPicker = renderEntryCatPicker;
+renderEntryCatPicker = function() {
+  originalRenderEntryCatPicker();
+  if (!entrySelectedAccount) {
+    entrySelectedAccount = '現金'; // デフォルト値を設定
+    renderEntryAccountPicker();
+  }
+};
+
 function submitEntry(){
   let amount=parseInt(document.getElementById('entry-amount').value,10);
   if(!amount||amount<=0){showToast('⚠ 金額を入力してください');return;}
@@ -1074,7 +1204,8 @@ function submitEntry(){
   const date=document.getElementById('entry-date').value||todayISO();
   const desc=document.getElementById('entry-desc').value.trim();
   const memo=document.getElementById('entry-memo').value.trim();
-  const tx={id:Date.now(),type:entryType,amount,category:cat,date,desc,memo};
+  const account=getEffectiveEntryAccount();
+  const tx={id:Date.now(),type:entryType,amount,category:cat,date,desc,memo,account};
   mutateUser(u=>{if(!u.transactions)u.transactions=[];u.transactions.push(tx);});
   saveData();
   document.getElementById('entry-amount').value='';
@@ -1082,7 +1213,10 @@ function submitEntry(){
   document.getElementById('entry-memo').value='';
   const customInput=document.getElementById('entry-cat-custom');
   if(customInput)customInput.value='';
-  entrySelectedCat='';renderEntryCatPicker();
+  const accCustom=document.getElementById('entry-account-custom');
+  if(accCustom)accCustom.value='';
+  entrySelectedCat='';entrySelectedAccount='';
+  renderEntryCatPicker();
   updateTaxPreview();
   renderHomeSummary();renderHomeBudget();renderHomeRecent();
   showToast(entryType==='expense'?'💸 支出を登録しました':'💰 収入を登録しました');
@@ -1223,7 +1357,8 @@ function deleteTx(id){
 // LIST TAB
 // ════════════════════════════════════════
 let listMode='month';
-let listPeriod='';
+const nowForInit = new Date();
+let listPeriod = `${nowForInit.getFullYear()}-${String(nowForInit.getMonth()+1).padStart(2,'0')}`;
 
 function setListMode(mode){
   listMode=mode;
@@ -1247,6 +1382,24 @@ function navPeriod(dir){
     listPeriod=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
   }else if(listMode==='year'){listPeriod=String(Number(listPeriod)+dir);}
   renderList();
+}
+
+/**
+ * 指定されたタブの表示期間を現在の年月に戻す
+ * @param {string} type 'list' または 'ledger'
+ */
+function jumpToCurrentMonth(type) {
+  const now = new Date();
+  const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  
+  if (type === 'list') {
+    listPeriod = yearMonth;
+    renderList();
+  } else if (type === 'ledger') {
+    ledgerPeriod = yearMonth;
+    renderLedger();
+  }
+  showToast('今月に戻りました');
 }
 
 function renderList(){
@@ -1353,7 +1506,7 @@ const ACCOUNT_MAP={
 function accountName(cat){return ACCOUNT_MAP[cat]||cat;}
 
 let ledgerMode='month';
-let ledgerPeriod='';
+let ledgerPeriod = `${nowForInit.getFullYear()}-${String(nowForInit.getMonth()+1).padStart(2,'0')}`;
 function setLedgerMode(mode){
   ledgerMode=mode;
   document.querySelectorAll('[data-ldmode]').forEach(b=>b.classList.toggle('active',b.dataset.ldmode===mode));
@@ -1386,8 +1539,9 @@ function renderLedger(){
   const rows=sorted.map(t=>{
     const isExpense=t.type==='expense';
     const acc=accountName(t.category);
-    const debitAcc=isExpense?acc:'現金・預金';
-    const creditAcc=isExpense?'現金・預金':acc;
+    const counterAcc=t.account||'現金・預金';
+    const debitAcc=isExpense?acc:counterAcc;
+    const creditAcc=isExpense?counterAcc:acc;
     const[,m,day]=t.date.split('-');
     if(isExpense)totalDebit+=t.amount;else totalCredit+=t.amount;
     return`<div class="ledger-row ${isExpense?'expense-row':'income-row'}">
@@ -1412,9 +1566,9 @@ function renderLedger(){
     ${rows}
     <div class="ledger-total">
       <div>合計</div>
-      <div style="text-align:right;font-family:'DM Mono',monospace;color:var(--expense-color);">¥${fmtAmt(totalDebit)}</div>
-      <div style="text-align:right;font-family:'DM Mono',monospace;color:var(--income-color);">¥${fmtAmt(totalCredit)}</div>
-      <div style="text-align:right;font-family:'DM Mono',monospace;color:${totalCredit>=totalDebit?'var(--balance-pos)':'var(--balance-neg)'};">${totalCredit>=totalDebit?'+':'-'}¥${fmtAmt(Math.abs(totalCredit-totalDebit))}</div>
+      <div style="text-align:right;font-family:'DM Mono',monospace;color:var(--expense-color);">¥${fmtAmt(totalDebit)}<span class="ledger-total-label">借方（支出）</span></div>
+      <div style="text-align:right;font-family:'DM Mono',monospace;color:var(--income-color);">¥${fmtAmt(totalCredit)}<span class="ledger-total-label">貸方（収入）</span></div>
+      <div style="text-align:right;font-family:'DM Mono',monospace;color:${totalCredit>=totalDebit?'var(--balance-pos)':'var(--balance-neg)'};">${totalCredit>=totalDebit?'+':'-'}¥${fmtAmt(Math.abs(totalCredit-totalDebit))}<span class="ledger-total-label">差引残高</span></div>
     </div>
   </div>`;
 }
@@ -1513,16 +1667,23 @@ function renderBudgetSettings(){
     const bgt=budgets[cat]||0;
     const checked=isChecked(cat);
     const spentHtml=spent>0?`<div style="font-size:10px;color:var(--text3);font-family:'DM Mono',monospace;text-align:right;">今月:¥${fmtAmt(spent)}</div>`:'';
-    return`<div class="budget-row" style="align-items:center;">
-      <span class="budget-name">${esc(cat)}</span>
-      <span class="budget-yen">¥</span>
-      <div style="display:flex;flex-direction:column;align-items:flex-end;">
-        <input class="budget-input" data-cat="${esc(cat)}" type="number" min="0" placeholder="予算なし"
-          value="${bgt||''}" onchange="saveCatBudget('${esc(cat)}',this.value)" style="width:100px;">
-        ${spentHtml}
+    // renderBudgetSettings 内の .map 部分を以下のように修正
+    return `<div class="budget-row" style="align-items:flex-start; margin-bottom:12px;">
+      <div style="flex:1;">
+        <div class="budget-name">${esc(cat)}</div>
+        <div style="font-size:10px; color:${spent > bgt && bgt > 0 ? 'var(--red-mid)' : 'var(--text3)'}; font-family:'DM Mono',monospace;">
+          今月実績: ¥${fmtAmt(spent)}
+        </div>
       </div>
-      <label style="width:40px;display:flex;justify-content:center;cursor:pointer;">
-        <input type="checkbox" data-bdi="${esc(cat)}" ${checked?'checked':''} onchange="saveBudgetDisplayItems()" style="width:16px;height:16px;accent-color:var(--accent);cursor:pointer;">
+      <div style="display:flex; flex-direction:column; align-items:flex-end;">
+        <div style="display:flex; align-items:center;">
+          <span class="budget-yen" style="margin-right:4px;">¥</span>
+          <input class="budget-input" data-cat="${esc(cat)}" type="number" min="0" placeholder="予算なし"
+            value="${bgt || ''}" onchange="saveCatBudget('${esc(cat)}',this.value)" style="width:100px;">
+        </div>
+      </div>
+      <label style="width:40px; display:flex; justify-content:center; padding-top:10px;">
+        <input type="checkbox" data-bdi="${esc(cat)}" ${checked ? 'checked' : ''} onchange="saveBudgetDisplayItems()" style="width:16px; height:16px; accent-color:var(--accent);">
       </label>
     </div>`;
   }).join('');
@@ -2209,6 +2370,17 @@ window.addEventListener('DOMContentLoaded', async () => {
   ensureDefaultGroup(); // グループがない場合に作成
   updateDateDisplay();
 
+  // 現在の年月を取得して初期値をセット
+  const now = new Date();
+  const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  
+  if (typeof listPeriod !== 'undefined') listPeriod = yearMonth;
+  if (typeof ledgerPeriod !== 'undefined') ledgerPeriod = yearMonth;
+
+  // 表示を更新
+  renderList();
+  renderLedger();
+
   const savedGroupId = getCurrentGroupId();
   const savedUserId = getPinnedUserId();
 
@@ -2227,6 +2399,31 @@ window.addEventListener('DOMContentLoaded', async () => {
     // データがない場合はウェルカム画面を表示
     showWelcome();
   }
+});
+// 削除したユーザーの復元
+document.getElementById('menu-deleted-users-btn').onclick = () => {
+  const d = loadGroupData();
+  if (!d.deletedUsers || d.deletedUsers.length === 0) {
+    showToast('削除されたユーザーはいません');
+    return;
+  }
+  const userNames = d.deletedUsers.map(u => u.name).join(', ');
+  if (confirm(`以下のユーザーを復元しますか？\n${userNames}`)) {
+    d.users.push(...d.deletedUsers);
+    d.deletedUsers = [];
+    saveGroupData(d);
+    saveData();
+    renderAll();
+    showToast('✅ ユーザーを復元しました');
+  }
+};
+
+// 親モード（全員表示）の切り替え連動
+document.getElementById('parent-mode-toggle').addEventListener('change', (e) => {
+  setParentMode(e.target.checked);
+  document.getElementById('parent-mode-track').style.background = e.target.checked ? 'var(--accent)' : 'var(--border2)';
+  renderAll();
+  showToast(e.target.checked ? '👨‍👩‍👧 親モード: ON' : '👤 親モード: OFF');
 });
 </script>
 </body>
