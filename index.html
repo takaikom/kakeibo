@@ -52,6 +52,8 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
 .user-tabs::-webkit-scrollbar{display:none;}
 .user-tab{flex-shrink:0;padding:8px 14px;font-size:13px;font-weight:500;color:var(--text3);border:none;background:transparent;cursor:grab;border-bottom:2.5px solid transparent;margin-bottom:-1px;transition:color .15s,border-color .15s;white-space:nowrap;font-family:'Noto Sans JP',sans-serif;-webkit-tap-highlight-color:transparent;user-select:none;touch-action:none;}
 .user-tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+.user-tab.is-me{background:var(--accent-light);color:var(--accent-dark);}
+.user-tab.is-me.active{color:var(--accent-dark);border-bottom-color:var(--accent);}
 .user-tab.drag-dragging{opacity:0.35;background:var(--surface2);}
 .user-tab.drag-over{border-bottom:2.5px solid var(--blue);color:var(--blue);}
 .user-tab-ghost{position:fixed;pointer-events:none;z-index:9999;padding:8px 14px;font-size:13px;font-weight:700;color:var(--accent);background:var(--accent-light);border:1.5px solid var(--accent);border-radius:8px;white-space:nowrap;font-family:'Noto Sans JP',sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.18);opacity:.92;}
@@ -121,9 +123,9 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
   align-items: flex-end;
 }
 
-/* 日付欄：コンパクトな固定幅 */
+/* 日付欄：内容幅に合わせる */
 .form-row > div:first-child {
-  flex: 0 0 130px;
+  flex: 0 0 auto;
   min-width: 0;
 }
 
@@ -132,17 +134,10 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
   flex: 1;
   min-width: 0;
 }
-
-/* スマホでも横並びを維持しつつ日付幅をさらに縮小 */
-@media (max-width: 390px) {
-  .form-row > div:first-child {
-    flex: 0 0 115px;
-  }
-}
 .form-input{width:100%;height:42px;border:1.5px solid var(--border2);border-radius:10px;padding:0 12px;font-family:'Noto Sans JP',sans-serif;font-size:13px;color:var(--text);background:var(--bg);outline:none;transition:border-color .2s;box-sizing:border-box;}
 .form-input:focus{border-color:var(--accent);background:white;}
 .form-input::placeholder{color:var(--text3);}
-.date-input{height:42px;border:1.5px solid var(--border2);border-radius:10px;padding:0 6px;font-family:'DM Mono',monospace;font-size:11px;color:var(--text);background:var(--bg);outline:none;transition:border-color .2s;color-scheme:light;width:100%;box-sizing:border-box;min-width:0;}
+.date-input{height:42px;border:1.5px solid var(--border2);border-radius:10px;padding:0 6px;font-family:'DM Mono',monospace;font-size:11px;color:var(--text);background:var(--bg);outline:none;transition:border-color .2s;color-scheme:light;width:auto;box-sizing:border-box;min-width:0;}
 .date-input:focus{border-color:var(--accent);}
 .memo-input{width:100%;border:1.5px solid var(--border2);border-radius:10px;padding:9px 12px;font-family:'Noto Sans JP',sans-serif;font-size:13px;color:var(--text);background:var(--bg);outline:none;resize:none;line-height:1.5;transition:border-color .2s;height:52px;}
 .memo-input:focus{border-color:var(--accent);background:white;}
@@ -288,7 +283,9 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
 .settings-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:12px;}
 .settings-card-title{font-size:13px;font-weight:700;margin-bottom:12px;color:var(--text2);}
 .cat-chip-list{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
-.cat-chip{display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;border:1.5px solid var(--border2);background:var(--surface2);font-size:13px;color:var(--text2);}
+.cat-chip{display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;border:1.5px solid var(--border2);background:var(--surface2);font-size:13px;color:var(--text2);cursor:grab;user-select:none;transition:opacity .15s,box-shadow .15s;}
+.cat-chip.chip-dragging{opacity:.3;cursor:grabbing;}
+.cat-chip.chip-drag-over{box-shadow:inset 2px 0 0 var(--accent),0 0 0 1.5px var(--accent);}
 .cat-chip-del{background:none;border:none;color:var(--text3);font-size:14px;cursor:pointer;line-height:1;padding:0;}
 .cat-chip-del:active{color:var(--red-mid);}
 .add-row{display:flex;gap:8px;flex-wrap:nowrap;align-items:center;}
@@ -399,7 +396,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
 <body>
 
 <!-- ══ WELCOME OVERLAY ══ -->
-<div class="welcome-overlay" id="welcome-overlay">
+<div class="welcome-overlay" id="welcome-overlay" style="display:none;">
   <div class="welcome-logo">💴</div>
   <div class="welcome-title">家計<span style="color:var(--accent);">簿</span></div>
   <div class="welcome-sub">家族で共有できる<br>シンプルな家計管理アプリ</div>
@@ -409,6 +406,20 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
     <div class="welcome-add-row">
       <input class="welcome-input" id="wc-group-name" placeholder="グループ名（例：田中家）" maxlength="20">
       <button class="welcome-btn" id="wc-group-add-btn">作成</button>
+    </div>
+    <!-- GAS設定（Step1） -->
+    <div style="margin-top:20px;border-top:1px solid var(--border);padding-top:16px;">
+      <div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:8px;">🔗 別デバイスから共有グループに参加する場合</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:8px;">GAS URLを入力して接続・同期すると、グループとメンバーが読み込まれます。</div>
+      <input class="welcome-input" id="wc-gas-url" type="url" placeholder="https://script.google.com/macros/s/..." style="font-size:12px;margin-bottom:8px;">
+      <button class="welcome-btn" id="wc-gas-connect-btn" style="width:100%;font-size:13px;">接続・同期してグループを読み込む</button>
+      <div id="wc-gas-status" style="font-size:11px;color:var(--text3);margin-top:6px;min-height:14px;text-align:center;"></div>
+    </div>
+    <!-- ご利用にあたって -->
+    <div style="margin-top:14px;padding:12px 14px;background:var(--surface2);border-radius:10px;font-size:10px;color:var(--text3);line-height:1.7;">
+      <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:4px;">⚠️ ご利用にあたって</div>
+      このアプリは開発者が個人利用目的で開発したツールです。勝手に機能・仕様変更し、それに伴い不具合が発生したり、予告なく公開終了する可能性があります。<b>ご利用は自己責任でお願いします。</b>
+      データの保証はできません。大切な情報は<b>定期的にご自身でバックアップ</b>してください。
     </div>
   </div>
   <div class="welcome-card" id="welcome-step2" style="display:none;">
@@ -457,7 +468,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
     </div>
     <div class="amount-row">
       <span class="amount-prefix">¥</span>
-      <input class="amount-input" id="entry-amount" type="number" min="0" placeholder="0" inputmode="numeric">
+      <input class="amount-input" id="entry-amount" type="text" placeholder="例：600 または +200+400" inputmode="decimal" autocomplete="off">
       <button class="submit-btn" id="entry-submit-btn" onclick="submitEntry()" style="width:68px;min-width:52px;height:50px;font-size:14px;margin-top:0;flex-shrink:0;border-radius:12px;white-space:nowrap;">登録</button>
     </div>
     <div class="tax-row" id="entry-tax-row">
@@ -473,11 +484,11 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
       <input class="form-input" id="entry-cat-custom" type="text" placeholder="または直接入力…" maxlength="12" style="width:100%;" oninput="onEntryCatCustomInput(this.value)">
     </div>
     <div class="form-row">
-      <div style="flex:1">
+      <div style="flex:0 0 auto;">
         <div class="form-label">日付</div>
         <input class="date-input" id="entry-date" type="date">
       </div>
-      <div style="flex:1">
+      <div style="flex:1;min-width:0;">
         <div class="form-label">摘要</div>
         <input class="form-input" id="entry-desc" type="text" placeholder="例：スーパー" maxlength="40">
       </div>
@@ -614,17 +625,22 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
   </div>
   <div class="section-label">GAS連携（家族共有）</div>
   <div class="settings-card" id="gas-settings-card">
-    <div class="settings-card-title">Google Apps Script URL</div>
-    <div class="setup-step"><div class="setup-num">1</div><div>Google スプレッドシートを作成し、拡張機能 → Apps Script を開く</div></div>
-    <div class="setup-step"><div class="setup-num">2</div><div>GASコード.js の内容を貼り付けて保存・デプロイ（ウェブアプリ）</div></div>
-    <div class="setup-step"><div class="setup-num">3</div><div>デプロイURLを下に貼り付けて「保存」</div></div>
-    <input class="url-input" id="gas-url-input" placeholder="https://script.google.com/macros/s/.../exec">
+    <div class="settings-card-title">🔗 GAS連携（グループ共有）</div>
+    <p style="font-size:12px;color:var(--text3);margin-bottom:12px;line-height:1.7;">URLを設定すると、同じグループのメンバー全員の記録をクラウドで共有できます。</p>
+    <input class="url-input" id="gas-url-input" type="url" placeholder="https://script.google.com/macros/s/...">
     <div style="display:flex;gap:8px;">
-      <button class="blue-btn" style="flex:1;" id="gas-save-btn">保存</button>
-      <button class="secondary-btn" id="gas-upload-btn">GASへ送信</button>
-      <button class="secondary-btn" id="gas-download-btn">GASから受信</button>
+      <button class="blue-btn" style="flex:1;" id="gas-save-btn">URLを保存・接続</button>
+      <button class="secondary-btn" id="gas-clear-btn">解除</button>
     </div>
-    <div class="sync-status-text" id="gas-status-text">未設定</div>
+    <div class="sync-status-text" id="gas-status-text">未設定（ローカル保存のみ）</div>
+    <div style="margin-top:20px;">
+      <div class="settings-card-title" style="margin-bottom:10px;">📋 GASセットアップ手順</div>
+      <div class="setup-step"><div class="setup-num">1</div><div>Googleスプレッドシートを新規作成</div></div>
+      <div class="setup-step"><div class="setup-num">2</div><div>「拡張機能」→「Apps Script」を開く</div></div>
+      <div class="setup-step"><div class="setup-num">3</div><div>添付の <code style="font-size:11px;background:var(--surface2);padding:1px 5px;border-radius:4px;">GASコード.js</code> を貼り付けて保存</div></div>
+      <div class="setup-step"><div class="setup-num">4</div><div>「デプロイ」→「新しいデプロイ」→ 種類「ウェブアプリ」→ アクセス「全員」→ URLをコピーして上に貼り付け</div></div>
+      <div class="setup-step"><div class="setup-num">5</div><div>他のメンバーも同じURLを設定し、同じグループ名・自分の名前で参加する</div></div>
+    </div>
   </div>
 </div>
 
@@ -674,7 +690,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
       </button>
       <button class="menu-item" id="menu-delete-user-btn">
         <div class="menu-icon" style="background:var(--red-light);">🗑️</div>
-        <div><div>このユーザーを削除</div><div class="menu-item-desc">一時削除（復元可能）</div></div>
+        <div><div id="menu-delete-user-label">このユーザーを削除</div><div class="menu-item-desc">一時削除（復元可能）</div></div>
       </button>
       <button class="menu-item" id="menu-deleted-users-btn">
         <div class="menu-icon" style="background:var(--amber-light);">👤</div>
@@ -719,17 +735,28 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
       <div class="sheet-label">金額</div>
       <div class="amount-row" style="margin-bottom:12px;">
         <span class="amount-prefix">¥</span>
-        <input class="amount-input" id="edit-amount" type="number" min="0" inputmode="numeric">
+        <input class="amount-input" id="edit-amount" type="text" placeholder="例：600 または +200+400" inputmode="decimal" autocomplete="off">
       </div>
       <div class="sheet-label">カテゴリ</div>
       <div class="cat-picker" id="edit-cat-picker" style="margin-bottom:8px;"></div>
       <input class="form-input" id="edit-cat-custom" type="text" placeholder="または直接入力…" maxlength="12" style="width:100%;margin-bottom:12px;" oninput="onEditCatCustomInput(this.value)">
-      <div class="sheet-label">日付</div>
-      <input class="date-input" id="edit-date" type="date" style="margin-bottom:12px;">
-      <div class="sheet-label">摘要</div>
-      <input class="form-input" id="edit-desc" type="text" maxlength="40" style="width:100%;margin-bottom:12px;">
+      <div class="form-row" style="margin-bottom:12px;">
+        <div style="flex:0 0 auto;">
+          <div class="sheet-label" style="margin-bottom:5px;">日付</div>
+          <input class="date-input" id="edit-date" type="date" style="width:auto;">
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div class="sheet-label" style="margin-bottom:5px;">摘要</div>
+          <input class="form-input" id="edit-desc" type="text" maxlength="40" style="width:100%;">
+        </div>
+      </div>
       <div class="sheet-label">メモ</div>
-      <textarea class="memo-input" id="edit-memo" maxlength="100" style="margin-bottom:4px;"></textarea>
+      <textarea class="memo-input" id="edit-memo" maxlength="100" style="margin-bottom:12px;"></textarea>
+      <div class="sheet-label">相手勘定科目（仕訳用）</div>
+      <div style="display:flex;gap:6px;margin-bottom:4px;">
+        <div class="cat-picker" id="edit-account-picker" style="flex:1;flex-wrap:wrap;gap:6px;margin-bottom:0;"></div>
+      </div>
+      <input class="form-input" id="edit-account-custom" type="text" placeholder="または直接入力（例：普通預金、現金）" maxlength="20" style="width:100%;margin-bottom:4px;" oninput="onEditAccountCustomInput(this.value)">
     </div>
     <div class="sheet-footer">
       <div class="sheet-actions">
@@ -927,8 +954,8 @@ function refreshGasStatus(){
   const el=document.getElementById('gas-url-input');
   const st=document.getElementById('gas-status-text');
   if(el)el.value=url||'';
-  if(!url){setSyncDot('off');if(st){st.textContent='未設定';st.className='sync-status-text';}}
-  else{setSyncDot('ok');if(st){st.textContent='✅ GAS URL設定済み';st.className='sync-status-text ok';}}
+  if(!url){setSyncDot('off');if(st){st.textContent='未設定（ローカル保存のみ）';st.className='sync-status-text';}}
+  else{setSyncDot('ok');if(st){st.textContent='🔗 GAS連携が設定されています（このグループ）';st.className='sync-status-text ok';}}
 }
 
 // ════════════════════════════════════════
@@ -1077,9 +1104,10 @@ function renderUserTabs(){
 
   visibleUsers.forEach(u=>{
     const btn=document.createElement('button');
-    btn.className='user-tab'+(u.id===curUid?' active':'');
+    const isMe=parent&&u.id===pinnedId;
+    btn.className='user-tab'+(u.id===curUid?' active':'')+(isMe?' is-me':'');
     btn.dataset.uid=u.id;
-    btn.textContent=(u.isChild?'👧 ':'')+u.name;
+    btn.textContent=(u.isChild?'👧 ':'')+u.name+(isMe?' 👤':'');
 
     // ── タッチ操作（長押し→ドラッグ）──
     btn.addEventListener('touchstart',e=>{
@@ -1391,7 +1419,7 @@ function updateTaxPreview(){
   const preview=document.getElementById('entry-tax-preview');
   if(!toggle||!preview)return;
   const amtVal=document.getElementById('entry-amount')?.value;
-  const amt=parseInt(amtVal,10);
+  const amt=evalAmountExpr(amtVal||'');
   if(toggle.checked&&amt>0){
     const cat=getEffectiveEntryCat();
     const rate=getTaxRateForCat(cat||'');
@@ -1423,8 +1451,9 @@ renderEntryCatPicker = function() {
 };
 
 function submitEntry(){
-  let amount=parseInt(document.getElementById('entry-amount').value,10);
-  if(!amount||amount<=0){showToast('⚠ 金額を入力してください');return;}
+  const amtEl=document.getElementById('entry-amount');
+  let amount=evalAmountExpr(amtEl.value);
+  if(isNaN(amount)||amount<=0){showToast('⚠ 金額を入力してください');return;}
   const cat=getEffectiveEntryCat();
   if(!cat){showToast('⚠ カテゴリを選択または入力してください');return;}
   // 税抜きチェック
@@ -1851,6 +1880,68 @@ function saveDefaultTaxRate(val){
   updateTaxPreview();
 }
 
+function makeSortableChips(el,getItems,saveItems,onAfter){
+  // タッチ長押し＋ドラッグで並び替え
+  let dragIdx=null,ghost=null,offX=0,offY=0,lpTimer=null,dragging=false,sx=0,sy=0;
+  function chips(){return [...el.querySelectorAll('.cat-chip')];}
+  function idxOf(chip){return chips().indexOf(chip);}
+  function nearestIdx(cx,cy){
+    let best=null,bestD=Infinity;
+    chips().forEach((c,i)=>{const r=c.getBoundingClientRect();const mx=r.left+r.width/2,my=r.top+r.height/2;const d=Math.hypot(cx-mx,cy-my);if(d<bestD){bestD=d;best=i;}});
+    return best;
+  }
+  function startDrag(chipEl,cx,cy){
+    dragging=true;dragIdx=idxOf(chipEl);
+    const r=chipEl.getBoundingClientRect();offX=cx-r.left;offY=cy-r.top;
+    chipEl.classList.add('chip-dragging');
+    ghost=document.createElement('div');
+    ghost.className='cat-chip';ghost.style.cssText='position:fixed;z-index:9999;pointer-events:none;opacity:.9;box-shadow:0 4px 16px rgba(0,0,0,.2);background:var(--accent-light);border-color:var(--accent);color:var(--accent-dark);';
+    ghost.textContent=chipEl.querySelector('span').textContent;
+    document.body.appendChild(ghost);moveGhost(cx,cy);
+    if(navigator.vibrate)navigator.vibrate(40);
+  }
+  function moveGhost(cx,cy){if(ghost){ghost.style.left=(cx-offX)+'px';ghost.style.top=(cy-offY)+'px';}}
+  function endDrag(cx,cy){
+    if(!dragging){clearTimeout(lpTimer);lpTimer=null;dragIdx=null;return;}
+    dragging=false;clearTimeout(lpTimer);lpTimer=null;
+    if(ghost){ghost.remove();ghost=null;}
+    el.querySelectorAll('.chip-dragging,.chip-drag-over').forEach(c=>c.classList.remove('chip-dragging','chip-drag-over'));
+    const toIdx=nearestIdx(cx,cy);
+    if(toIdx!=null&&toIdx!==dragIdx){
+      const items=getItems();const [moved]=items.splice(dragIdx,1);items.splice(toIdx,0,moved);
+      saveItems(items);onAfter();
+    }
+    dragIdx=null;
+  }
+  el.addEventListener('touchstart',e=>{
+    const chip=e.target.closest('.cat-chip');if(!chip||e.target.classList.contains('cat-chip-del'))return;
+    sx=e.touches[0].clientX;sy=e.touches[0].clientY;dragging=false;
+    lpTimer=setTimeout(()=>startDrag(chip,sx,sy),380);
+  },{passive:true});
+  el.addEventListener('touchmove',e=>{
+    const cx=e.touches[0].clientX,cy=e.touches[0].clientY;
+    if(!dragging&&(Math.abs(cx-sx)>6||Math.abs(cy-sy)>6)){clearTimeout(lpTimer);lpTimer=null;return;}
+    if(!dragging)return;
+    e.preventDefault();moveGhost(cx,cy);
+    el.querySelectorAll('.chip-drag-over').forEach(c=>c.classList.remove('chip-drag-over'));
+    const ti=nearestIdx(cx,cy);if(ti!=null&&ti!==dragIdx){chips()[ti]?.classList.add('chip-drag-over');}
+  },{passive:false});
+  el.addEventListener('touchend',e=>{const t=e.changedTouches[0];endDrag(t.clientX,t.clientY);},{passive:true});
+  el.addEventListener('touchcancel',()=>{clearTimeout(lpTimer);lpTimer=null;dragging=false;dragIdx=null;if(ghost){ghost.remove();ghost=null;}el.querySelectorAll('.chip-dragging,.chip-drag-over').forEach(c=>c.classList.remove('chip-dragging','chip-drag-over'));},{passive:true});
+  // マウス操作
+  el.addEventListener('mousedown',e=>{
+    const chip=e.target.closest('.cat-chip');if(!chip||e.target.classList.contains('cat-chip-del'))return;
+    sx=e.clientX;sy=e.clientY;dragging=false;
+    lpTimer=setTimeout(()=>{startDrag(chip,sx,sy);},280);
+  });
+  document.addEventListener('mousemove',e=>{
+    if(!dragging)return;moveGhost(e.clientX,e.clientY);
+    el.querySelectorAll('.chip-drag-over').forEach(c=>c.classList.remove('chip-drag-over'));
+    const ti=nearestIdx(e.clientX,e.clientY);if(ti!=null&&ti!==dragIdx){chips()[ti]?.classList.add('chip-drag-over');}
+  });
+  document.addEventListener('mouseup',e=>{if(dragIdx!=null)endDrag(e.clientX,e.clientY);clearTimeout(lpTimer);lpTimer=null;});
+}
+
 function renderCatChips(type){
   const cats=type==='expense'?getExpenseCats():getIncomeCats();
   const el=document.getElementById(type+'-cat-chips');
@@ -1864,6 +1955,11 @@ function renderCatChips(type){
       renderSettings();showToast('カテゴリを削除しました');
     });
   });
+  makeSortableChips(el,
+    ()=>type==='expense'?getExpenseCats():getIncomeCats(),
+    items=>mutateUser(u=>{if(type==='expense')u.expenseCats=items;else u.incomeCats=items;}),
+    ()=>{renderSettings();renderEntryCatPicker();}
+  );
 }
 
 function addCat(type){
@@ -1896,6 +1992,11 @@ function renderAccountChips(type){
       renderSettings();renderEntryAccountPicker();showToast('勘定科目を削除しました');
     });
   });
+  makeSortableChips(el,
+    ()=>type==='expense'?getExpenseAccounts():getIncomeAccounts(),
+    items=>mutateUser(u=>{if(type==='expense')u.expenseAccounts=items;else u.incomeAccounts=items;}),
+    ()=>{renderSettings();renderEntryAccountPicker();}
+  );
 }
 
 function addAccount(type){
@@ -2068,6 +2169,20 @@ function openEdit(id){
     if(customInput)customInput.value=tx.category||'';
     renderEditCatPicker('');
   }
+  // 相手勘定科目
+  const accounts=editType==='expense'?getExpenseAccounts():getIncomeAccounts();
+  const accCustomInput=document.getElementById('edit-account-custom');
+  if(tx.account&&accounts.includes(tx.account)){
+    editSelectedAccount=tx.account;
+    if(accCustomInput)accCustomInput.value='';
+  }else if(tx.account){
+    editSelectedAccount='__custom_acc__';
+    if(accCustomInput)accCustomInput.value=tx.account;
+  }else{
+    editSelectedAccount='';
+    if(accCustomInput)accCustomInput.value='';
+  }
+  renderEditAccountPicker(editSelectedAccount==='__custom_acc__'?'':editSelectedAccount);
   document.getElementById('edit-sheet').classList.add('open');
 }
 function setEditType(type){
@@ -2075,6 +2190,7 @@ function setEditType(type){
   document.getElementById('edit-type-expense').classList.toggle('active',type==='expense');
   document.getElementById('edit-type-income').classList.toggle('active',type==='income');
   renderEditCatPicker('');
+  renderEditAccountPicker('');
 }
 function renderEditCatPicker(selected){
   const cats=editType==='expense'?getExpenseCats():getIncomeCats();
@@ -2100,19 +2216,47 @@ function getEffectiveEditCat(){
   const selBtn=document.getElementById('edit-cat-picker').querySelector('.cat-pick-btn.selected');
   return selBtn?selBtn.textContent:'';
 }
+// ── 相手勘定科目（編集シート用） ──
+let editSelectedAccount='';
+function renderEditAccountPicker(selected){
+  const accounts=editType==='expense'?getExpenseAccounts():getIncomeAccounts();
+  const el=document.getElementById('edit-account-picker');
+  if(!el)return;
+  editSelectedAccount=selected!==undefined?selected:editSelectedAccount;
+  el.innerHTML=accounts.map(a=>
+    `<button class="cat-pick-btn${editSelectedAccount===a?' selected':''}" style="font-size:12px;padding:5px 10px;" onclick="selectEditAccount('${esc(a)}')">${esc(a)}</button>`
+  ).join('');
+}
+function selectEditAccount(acc){
+  editSelectedAccount=acc;
+  document.getElementById('edit-account-custom').value='';
+  renderEditAccountPicker(acc);
+}
+function onEditAccountCustomInput(val){
+  if(val.trim()){editSelectedAccount='__custom_acc__';}
+  else{editSelectedAccount='';}
+  renderEditAccountPicker(editSelectedAccount);
+}
+function getEffectiveEditAccount(){
+  if(editSelectedAccount==='__custom_acc__'){
+    return document.getElementById('edit-account-custom')?.value.trim()||'現金・預金';
+  }
+  return editSelectedAccount||'現金・預金';
+}
 function closeEditSheet(){document.getElementById('edit-sheet').classList.remove('open');}
 document.getElementById('edit-sheet').addEventListener('click',e=>{if(e.target.id==='edit-sheet')closeEditSheet();});
 function saveEdit(){
-  const amount=parseInt(document.getElementById('edit-amount').value,10);
-  if(!amount||amount<=0){showToast('⚠ 金額を入力してください');return;}
+  const amount=evalAmountExpr(document.getElementById('edit-amount').value);
+  if(isNaN(amount)||amount<=0){showToast('⚠ 金額を入力してください');return;}
   const cat=getEffectiveEditCat();
   if(!cat){showToast('⚠ カテゴリを選択または入力してください');return;}
   const date=document.getElementById('edit-date').value;
   const desc=document.getElementById('edit-desc').value.trim();
   const memo=document.getElementById('edit-memo').value.trim();
+  const account=getEffectiveEditAccount();
   mutateUser(u=>{
     const i=u.transactions.findIndex(t=>t.id===editingId);
-    if(i>=0)u.transactions[i]={...u.transactions[i],type:editType,amount,category:cat,date,desc,memo};
+    if(i>=0)u.transactions[i]={...u.transactions[i],type:editType,amount,category:cat,date,desc,memo,account};
   });
   saveData();closeEditSheet();
   renderTab(currentTab);renderHomeSummary();renderHomeBudget();
@@ -2171,9 +2315,12 @@ function saveDeletedGroups(dg){localStorage.setItem(DELETED_GROUPS_KEY,JSON.stri
 document.getElementById('menu-btn').addEventListener('click',()=>{
   const cg=getCurrentGroup();
   if(cg){
+    document.getElementById('menu-rename-group-label').textContent=`グループ「${cg.name}」の名前を変更`;
+    document.getElementById('menu-delete-group-label').textContent=`グループ「${cg.name}」を削除`;
     document.getElementById('menu-group-name-desc').textContent=cg.name;
     const cu=getCurrentUser();
-    document.getElementById('menu-rename-user-label').textContent=`「${cu.name}」の名前を変更`;
+    document.getElementById('menu-rename-user-label').textContent=`ユーザー「${cu.name}」の名前を変更`;
+    document.getElementById('menu-delete-user-label').textContent=`ユーザー「${cu.name}」を削除`;
   }
   // 削除済みバッジ更新
   const du=(loadGroupData().deletedUsers||[]).length;
@@ -2427,23 +2574,21 @@ document.getElementById('menu-import-btn').addEventListener('click',()=>{closeMe
 // ════════════════════════════════════════
 document.getElementById('gas-save-btn').addEventListener('click',async()=>{
   const url=document.getElementById('gas-url-input').value.trim();
-  setGroupGasUrl(url);refreshGasStatus();
-  if(url){
-    showToast('🔗 GAS URLを保存しました');
+  if(!url){showToast('⚠ URLを入力してください');return;}
+  const status=document.getElementById('gas-status-text');
+  status.textContent='接続確認中…';setSyncDot('syncing');
+  try{
+    setGroupGasUrl(url);
     await syncFromRemote(false);
-  }else{showToast('GAS URLをクリアしました');}
-  renderGroupTabs();
+    refreshGasStatus();
+    showToast('✅ GAS連携を設定しました');
+    renderGroupTabs();
+  }catch(e){setSyncDot('err');status.textContent='❌ 接続できませんでした';showToast('⚠ 接続に失敗しました');}
 });
-document.getElementById('gas-upload-btn').addEventListener('click',async()=>{
-  if(!getGroupGasUrl()){showToast('⚠ GAS URLを先に設定してください');return;}
-  setSyncDot('syncing');
-  const local=loadGroupData();const cg=getCurrentGroup();
-  const ok=await remoteSave(cg?{...local,groupName:cg.name}:local);
-  if(ok)showToast('☁️ GASへ送信しました');else showToast('⚠ 送信に失敗しました');
-});
-document.getElementById('gas-download-btn').addEventListener('click',async()=>{
-  if(!getGroupGasUrl()){showToast('⚠ GAS URLを先に設定してください');return;}
-  await syncFromRemote(false);
+document.getElementById('gas-clear-btn').addEventListener('click',()=>{
+  if(!confirm('GAS連携を解除しますか？'))return;
+  setGroupGasUrl('');refreshGasStatus();renderGroupTabs();
+  showToast('GAS連携を解除しました');
 });
 
 // ════════════════════════════════════════
@@ -2469,84 +2614,8 @@ document.getElementById('gas-download-btn').addEventListener('click',async()=>{
 // ════════════════════════════════════════
 // WELCOME SCREEN
 // ════════════════════════════════════════
-// すでに showWelcome という関数があれば、これに書き換えてください
-function showWelcome() {
-  const overlay = document.getElementById('welcome-overlay');
-  if (!overlay) return; // 要素がない場合はスキップ
-
-  overlay.classList.remove('hidden');
-  document.getElementById('welcome-step1').style.display = '';
-  document.getElementById('welcome-step2').style.display = 'none';
-
-  // 既存グループをリスト表示する領域を取得
-  const groupList = document.getElementById('welcome-group-list');
-  if (groupList) {
-    groupList.innerHTML = '';
-    
-    const gs = loadGroups(); // 既存のグループ読み込み
-    if (gs.length > 0) {
-      const title = document.createElement('div');
-      title.className = 'sheet-label';
-      title.textContent = '登録済みのグループから選ぶ：';
-      title.style.margin = '15px 0 8px 0';
-      groupList.appendChild(title);
-
-      gs.forEach(g => {
-        const item = document.createElement('div');
-        item.className = 'welcome-list-item'; // CSSでスタイルを当ててください
-        item.style.padding = '10px';
-        item.style.border = '1px solid #ccc';
-        item.style.marginBottom = '5px';
-        item.style.cursor = 'pointer';
-        item.innerHTML = `<span>${esc(g.name)}</span>`;
-        
-        item.onclick = () => {
-          setCurrentGroupId(g.id);
-          renderWelcomeStep2(g); // 3番の関数を呼び出す
-        };
-        groupList.appendChild(item);
-      });
-    }
-  }
-}
-// ステップ2：選択したグループ内のユーザーを表示する関数
-function renderWelcomeStep2(group) {
-  const step1 = document.getElementById('welcome-step1');
-  const step2 = document.getElementById('welcome-step2');
-  if (!step1 || !step2) return;
-
-  step1.style.display = 'none';
-  step2.style.display = '';
-  
-  const titleEl = document.getElementById('wc-step2-title');
-  if (titleEl) titleEl.textContent = `「${group.name}」の誰ですか？`;
-
-  const userList = document.getElementById('welcome-user-list');
-  userList.innerHTML = '';
-
-  // そのグループに所属するユーザーを表示
-  const d = loadGroupData(); 
-  if (d && d.users) {
-    d.users.forEach(u => {
-      const item = document.createElement('div');
-      item.className = 'welcome-list-item';
-      item.style.padding = '10px';
-      item.style.border = '1px solid #ccc';
-      item.style.marginBottom = '5px';
-      item.textContent = u.name;
-      
-      item.onclick = () => {
-        setCurrentUserId(u.id); // 現在のユーザーに設定
-        setPinnedUserId(u.id);  // ★ここが重要！次回リロード用に保存
-        
-        document.getElementById('welcome-overlay').classList.add('hidden');
-        renderAll(); // 画面更新
-      };
-      userList.appendChild(item);
-    });
-  }
-}
-function hideWelcome(){document.getElementById('welcome-overlay').classList.add('hidden');}
+function hideWelcome(){document.getElementById('welcome-overlay').style.display='none';}
+function showWelcome(){document.getElementById('welcome-overlay').style.display='flex';}
 
 function renderWelcomeStep1(){
   document.getElementById('welcome-step1').style.display='';
@@ -2582,6 +2651,35 @@ function renderWelcomeStep2(group){
 }
 
 document.getElementById('wc-back-btn').addEventListener('click',renderWelcomeStep1);
+
+// ── WELCOME GAS接続 ──
+document.getElementById('wc-gas-connect-btn').addEventListener('click',async()=>{
+  const urlEl=document.getElementById('wc-gas-url');
+  const statusEl=document.getElementById('wc-gas-status');
+  const url=urlEl.value.trim();
+  if(!url){statusEl.textContent='⚠️ URLを入力してください';return;}
+  statusEl.textContent='接続中…';
+  const remote=await remoteLoad(url);
+  if(!remote){statusEl.textContent='❌ 接続に失敗しました。URLを確認してください';return;}
+  const remoteName=remote.groupName||'共有グループ';
+  const gs=loadGroups();
+  let g=gs.find(g=>g.gasUrl===url);
+  if(!g){const id='g'+Date.now();g={id,name:remoteName,gasUrl:url};gs.push(g);saveGroups(gs);}
+  setCurrentGroupId(g.id);
+  // リモートデータをマージ
+  const local=loadGroupData();
+  const merged={...remote,groupName:remoteName};
+  const mergedDel=[...(local.deletedUsers||[])];
+  (remote.deletedUsers||[]).forEach(ru=>{if(!mergedDel.find(u=>u.id===ru.id))mergedDel.push(ru);});
+  merged.deletedUsers=mergedDel;
+  merged.users=(merged.users||[]).filter(ru=>!mergedDel.find(u=>u.id===ru.id));
+  local.users.forEach(lu=>{if(!merged.users.find(ru=>ru.id===lu.id)&&!mergedDel.find(u=>u.id===lu.id))merged.users.push(lu);});
+  if(!merged.users.find(u=>u.id===getCurrentUserId()))merged.users[0]&&setCurrentUserId(merged.users[0].id);
+  saveGroupData(merged);
+  statusEl.textContent='✅ 同期しました！メンバーを選んでください';
+  renderGroupTabs();
+  renderWelcomeStep2(g);
+});
 document.getElementById('wc-group-add-btn').addEventListener('click',()=>{
   const name=document.getElementById('wc-group-name').value.trim();if(!name)return;
   const gs=loadGroups();const id='g'+Date.now();
@@ -2618,21 +2716,36 @@ setInterval(updateDateDisplay,60000);
 ensureDefaultGroup();
 
 (function init(){
-  const pinned=getPinnedUserId();
-  const d=loadGroupData();
-  // 親モードトグルを復元
+  const LAUNCHED_KEY='kakeibo_launched';
+  const hasLaunched=!!localStorage.getItem(LAUNCHED_KEY);
+  localStorage.setItem(LAUNCHED_KEY,'1');
+
   const toggle=document.getElementById('parent-mode-toggle');
   toggle.checked=isParentMode();
   window._applyParentToggleStyle&&window._applyParentToggleStyle();
+
+  if(!hasLaunched){
+    // 完全初回 → Step1を表示
+    document.getElementById('entry-date').value=todayISO();
+    showWelcome();renderWelcomeStep1();return;
+  }
+
+  // currentGroupId を確定してから pinned を取得
+  const gs=loadGroups();
+  if(gs.length>0&&!getCurrentGroupId()){
+    setCurrentGroupId(gs[0].id);
+  }
+  const pinned=getPinnedUserId();
+  const d=loadGroupData();
 
   if(pinned&&d.users.find(u=>u.id===pinned)){
     setCurrentUserId(pinned);
     document.getElementById('entry-date').value=todayISO();
     document.getElementById('edit-date').value=todayISO();
-    renderAll();
+    hideWelcome();renderAll();
+    refreshGasStatus();
     if(getGroupGasUrl())syncFromRemote(true);
   }else{
-    const gs=loadGroups();
     showWelcome();
     if(gs.length===1){renderWelcomeStep2(gs[0]);}
     else{renderWelcomeStep1();}
@@ -2640,51 +2753,95 @@ ensureDefaultGroup();
   document.getElementById('entry-date').value=todayISO();
 })();
 
-// 金額入力変更時に税プレビュー更新
-document.getElementById('entry-amount').addEventListener('input',updateTaxPreview);
+// ════════════════════════════════════════
+// 金額欄：式計算ユーティリティ（例: +200+400 → 600）
+// ════════════════════════════════════════
+function evalAmountExpr(raw){
+  // 空文字・数値のみはそのまま返す
+  const s=raw.trim();
+  if(s===''||s==='-')return NaN;
+  // 数値のみ（小数含む）
+  if(/^\d+(\.\d+)?$/.test(s))return parseFloat(s);
+  // +/-演算子を含む式のみ許可（XSS対策: 数字・演算子・ドット以外は弾く）
+  if(!/^[0-9+\-.\s]+$/.test(s))return NaN;
+  try{
+    // 先頭の + は JavaScript の eval でそのまま動く; 念のためトリム
+    const result=Function('"use strict";return('+s+')')();
+    if(typeof result!=='number'||!isFinite(result)||result<0)return NaN;
+    return Math.round(result);
+  }catch(e){return NaN;}
+}
+
+function resolveAmountInput(el){
+  const val=evalAmountExpr(el.value);
+  if(!isNaN(val)&&val>0){
+    el.value=String(val);
+    return val;
+  }
+  return NaN;
+}
+
+// リアルタイムプレビューラベルの更新
+function showAmountCalcHint(el,hintId){
+  let hint=document.getElementById(hintId);
+  const raw=el.value.trim();
+  // 演算子がある場合のみヒント表示
+  const hasOp=/[+\-]/.test(raw.replace(/^-/,''));
+  if(!hasOp){if(hint)hint.style.display='none';return;}
+  const val=evalAmountExpr(raw);
+  if(!hint){
+    hint=document.createElement('div');
+    hint.id=hintId;
+    hint.style.cssText='font-size:11px;color:var(--accent-dark);margin-top:3px;text-align:right;font-family:"DM Mono",monospace;min-height:14px;transition:opacity .15s;';
+    el.parentNode.insertAdjacentElement('afterend',hint);
+  }
+  if(!isNaN(val)&&val>0){
+    hint.textContent='= ¥'+val.toLocaleString();
+    hint.style.display='block';
+  }else{
+    hint.textContent='⚠ 式が無効です';
+    hint.style.display='block';
+  }
+}
+
+// entry-amount
+document.getElementById('entry-amount').addEventListener('input',function(){
+  showAmountCalcHint(this,'entry-amount-hint');
+  updateTaxPreview();
+});
+document.getElementById('entry-amount').addEventListener('blur',function(){
+  resolveAmountInput(this);
+  const hint=document.getElementById('entry-amount-hint');
+  if(hint)hint.style.display='none';
+  updateTaxPreview();
+});
+
+// edit-amount
+document.getElementById('edit-amount').addEventListener('input',function(){
+  showAmountCalcHint(this,'edit-amount-hint');
+});
+document.getElementById('edit-amount').addEventListener('blur',function(){
+  resolveAmountInput(this);
+  const hint=document.getElementById('edit-amount-hint');
+  if(hint)hint.style.display='none';
+});
 
 // バックグラウンド復帰対応
 document.addEventListener('visibilitychange',()=>{
-  if(document.visibilityState==='visible'){renderAll();}
-});
-window.addEventListener('pageshow',e=>{if(e.persisted){renderAll();}});
-// ══ アプリ起動時の初期化 ══
-window.addEventListener('DOMContentLoaded', async () => {
-  ensureDefaultGroup(); // グループがない場合に作成
-  updateDateDisplay();
-
-  // 現在の年月を取得して初期値をセット
-  const now = new Date();
-  const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  
-  if (typeof listPeriod !== 'undefined') listPeriod = yearMonth;
-  if (typeof ledgerPeriod !== 'undefined') ledgerPeriod = yearMonth;
-
-  // 表示を更新
-  renderList();
-  renderLedger();
-
-  const savedGroupId = getCurrentGroupId();
-  const savedUserId = getPinnedUserId();
-
-  // すでにグループとユーザーが選択されている場合はメイン画面へ
-  if (savedGroupId && savedUserId) {
-    document.getElementById('welcome-overlay').classList.add('hidden');
-    
-    // GAS連携がある場合は同期を試みる
-    const cg = getCurrentGroup();
-    if (cg && cg.gasUrl) {
-      await syncFromRemote(true);
-    } else {
-      renderAll();
-    }
-  } else {
-    // データがない場合はウェルカム画面を表示
-    showWelcome();
+  if(document.visibilityState==='visible'){
+    const pinned=getPinnedUserId();const d=loadGroupData();
+    if(pinned&&d.users.find(u=>u.id===pinned)){hideWelcome();}
+    renderAll();
   }
 });
-
-
+window.addEventListener('pageshow',e=>{
+  if(e.persisted){
+    // bfcacheからの復元（iOS Safari）
+    const pinned=getPinnedUserId();const d=loadGroupData();
+    if(pinned&&d.users.find(u=>u.id===pinned)){hideWelcome();}
+    renderAll();
+  }
+});
 // 親モード（全員表示）の切り替え連動
 document.getElementById('parent-mode-toggle').addEventListener('change', (e) => {
   setParentMode(e.target.checked);
