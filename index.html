@@ -1686,10 +1686,25 @@ function renderHomeBudget(){
 // HOME RECENT
 // ════════════════════════════════════════
 function renderHomeRecent(){
-  const txs=[...getTransactions()].sort((a,b)=>b.id-a.id).slice(0,10);
+  const txs=[...getTransactions()].sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
   const el=document.getElementById('home-recent');
   if(!txs.length){el.innerHTML='<div class="empty-state">まだ取引がありません<br>上のフォームから登録してみましょう</div>';return;}
-  el.innerHTML=txs.map(t=>txCard(t)).join('');
+  // 日付でグループ化
+  const byDate={};
+  txs.forEach(t=>{if(!byDate[txDate(t)])byDate[txDate(t)]=[];byDate[txDate(t)].push(t);});
+  el.innerHTML=Object.entries(byDate).map(([date,ts])=>{
+    const dayIncome=ts.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
+    const dayExpense=ts.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
+    const net=dayIncome-dayExpense;
+    const[,m,day]=date.split('-');
+    return`<div class="tx-group">
+      <div class="tx-date-header">
+        <span class="tx-date-label">${parseInt(m)}/${parseInt(day)}</span>
+        <span class="tx-date-net ${net>=0?'pos':'neg'}">${net>=0?'+':'-'}¥${fmtAmt(Math.abs(net))}</span>
+      </div>
+      ${ts.map(t=>txCardFull(t)).join('')}
+    </div>`;
+  }).join('');
   bindTxButtons(el);
 }
 
@@ -1704,6 +1719,29 @@ function txCard(t){
     <div class="tx-info">
       <div class="tx-cat ${t.type}">${esc(t.category)}</div>
       <div class="tx-desc${!t.desc&&!t.memo?' no-desc':''}">${esc(t.desc||t.memo||'摘要なし')}</div>
+    </div>
+    <div class="tx-amount ${t.type}">${sign}¥${fmtAmt(t.amount)}</div>
+    <div class="card-actions">
+      <button class="act-btn edit" data-id="${t.id}">✏️</button>
+      <button class="act-btn del" data-id="${t.id}">✕</button>
+    </div>
+  </div>`;
+}
+
+// ホーム「最近の取引」用：全情報表示カード
+function txCardFull(t){
+  const icon=CAT_ICONS[t.category]||'💴';
+  const sign=t.type==='income'?'+':'-';
+  const sub=[];
+  if(t.account) sub.push(t.account);
+  if(t.desc)    sub.push(esc(t.desc));
+  if(t.memo)    sub.push('📝 '+esc(t.memo));
+  const subText=sub.length?sub.join(' · '):'<span style="color:var(--border2)">摘要なし</span>';
+  return`<div class="tx-card">
+    <div class="tx-icon ${t.type}">${icon}</div>
+    <div class="tx-info">
+      <div class="tx-cat ${t.type}">${esc(t.category)}</div>
+      <div class="tx-desc">${subText}</div>
     </div>
     <div class="tx-amount ${t.type}">${sign}¥${fmtAmt(t.amount)}</div>
     <div class="card-actions">
