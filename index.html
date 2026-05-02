@@ -2372,36 +2372,44 @@ document.getElementById('menu-delete-user-btn').addEventListener('click',()=>{
 // 削除したユーザー復元
 document.getElementById('menu-deleted-users-btn').addEventListener('click',()=>{
   closeMenu();
-  const d=loadGroupData();const deleted=d.deletedUsers||[];
   const ov=document.createElement('div');
   ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:300;display:flex;align-items:flex-end;justify-content:center;';
-  const listHtml=deleted.length
-    ? deleted.map((u,i)=>`<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:12px;border:1px solid var(--border);background:var(--surface);margin-bottom:8px;">
-        <div style="flex:1;"><div style="font-size:14px;font-weight:500;">${esc(u.name)}</div><div style="font-size:11px;color:var(--text3);">取引${(u.transactions||[]).length}件・削除日:${u.deletedAt||'不明'}</div></div>
-        <button data-idx="${i}" class="_ru-btn" style="padding:6px 14px;border-radius:8px;border:1px solid var(--blue);background:var(--blue-light);color:var(--blue);font-family:inherit;font-size:13px;font-weight:500;cursor:pointer;">復元</button>
-        <button data-idx="${i}" class="_pu-btn" style="padding:6px 14px;border-radius:8px;border:1px solid var(--red-mid);background:var(--red-light);color:var(--red-mid);font-family:inherit;font-size:13px;font-weight:500;cursor:pointer;">完全削除</button>
-      </div>`).join('')
-    : '<div style="text-align:center;padding:20px;color:var(--text3);font-size:14px;">一時削除されたユーザーはいません</div>';
-  ov.innerHTML=`<div style="background:var(--surface);border-radius:20px 20px 0 0;padding:24px 20px calc(24px + env(safe-area-inset-bottom));width:100%;max-width:480px;max-height:80vh;overflow-y:auto;animation:slideUp .24s cubic-bezier(.22,1,.36,1);">
-    <div style="font-size:15px;font-weight:700;margin-bottom:16px;">削除したユーザー</div>
-    ${listHtml}
-    <button id="_duu-close" style="width:100%;height:40px;border-radius:12px;border:none;background:var(--surface2);color:var(--text2);font-family:inherit;font-size:14px;cursor:pointer;margin-top:4px;">閉じる</button>
-  </div>`;
+  const sheet=document.createElement('div');
+  sheet.style.cssText='background:var(--surface);border-radius:20px 20px 0 0;padding:24px 20px calc(24px + env(safe-area-inset-bottom));width:100%;max-width:480px;max-height:80vh;overflow-y:auto;animation:slideUp .24s cubic-bezier(.22,1,.36,1);';
+  ov.appendChild(sheet);
   document.body.appendChild(ov);
-  ov.querySelectorAll('._ru-btn').forEach(btn=>btn.addEventListener('click',()=>{
-    const idx=parseInt(btn.dataset.idx);const d2=loadGroupData();
-    if(!d2.deletedUsers)d2.deletedUsers=[];
-    const u=d2.deletedUsers.splice(idx,1)[0];delete u.deletedAt;
-    d2.users.push(u);saveGroupData(d2);saveData();
-    ov.remove();renderAll();showToast(`✅「${u.name}」を復元しました`);
-  }));
-  ov.querySelectorAll('._pu-btn').forEach(btn=>btn.addEventListener('click',()=>{
-    const idx=parseInt(btn.dataset.idx);const d2=loadGroupData();
-    if(!d2.deletedUsers)d2.deletedUsers=[];
-    const u=d2.deletedUsers.splice(idx,1)[0];saveGroupData(d2);
-    ov.remove();showToast(`「${u.name}」を完全削除しました`);
-  }));
-  ov.querySelector('#_duu-close').addEventListener('click',()=>ov.remove());
+
+  function renderDeletedList(){
+    const d=loadGroupData();const deleted=d.deletedUsers||[];
+    const listHtml=deleted.length
+      ? deleted.map((u,i)=>`<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:12px;border:1px solid var(--border);background:var(--surface);margin-bottom:8px;">
+          <div style="flex:1;"><div style="font-size:14px;font-weight:500;">${esc(u.name)}</div><div style="font-size:11px;color:var(--text3);">取引${(u.transactions||[]).length}件・削除日:${u.deletedAt||'不明'}</div></div>
+          <button data-idx="${i}" class="_ru-btn" style="padding:6px 14px;border-radius:8px;border:1px solid var(--blue);background:var(--blue-light);color:var(--blue);font-family:inherit;font-size:13px;font-weight:500;cursor:pointer;">復元</button>
+          <button data-idx="${i}" class="_pu-btn" style="padding:6px 14px;border-radius:8px;border:1px solid var(--red-mid);background:var(--red-light);color:var(--red-mid);font-family:inherit;font-size:13px;font-weight:500;cursor:pointer;">完全削除</button>
+        </div>`).join('')
+      : '<div style="text-align:center;padding:20px;color:var(--text3);font-size:14px;">一時削除されたユーザーはいません</div>';
+    sheet.innerHTML=`<div style="font-size:15px;font-weight:700;margin-bottom:16px;">削除したユーザー</div>
+      ${listHtml}
+      <button id="_duu-close" style="width:100%;height:40px;border-radius:12px;border:none;background:var(--surface2);color:var(--text2);font-family:inherit;font-size:14px;cursor:pointer;margin-top:4px;">閉じる</button>`;
+    sheet.querySelectorAll('._ru-btn').forEach(btn=>btn.addEventListener('click',()=>{
+      const idx=parseInt(btn.dataset.idx);const d2=loadGroupData();
+      if(!d2.deletedUsers)d2.deletedUsers=[];
+      const u=d2.deletedUsers.splice(idx,1)[0];delete u.deletedAt;
+      d2.users.push(u);saveGroupData(d2);saveData();
+      renderAll();showToast(`✅「${u.name}」を復元しました`);
+      renderDeletedList();
+    }));
+    sheet.querySelectorAll('._pu-btn').forEach(btn=>btn.addEventListener('click',()=>{
+      const idx=parseInt(btn.dataset.idx);const d2=loadGroupData();
+      if(!d2.deletedUsers)d2.deletedUsers=[];
+      const u=d2.deletedUsers.splice(idx,1)[0];saveGroupData(d2);
+      showToast(`「${u.name}」を完全削除しました`);
+      renderDeletedList();
+    }));
+    sheet.querySelector('#_duu-close').addEventListener('click',()=>ov.remove());
+  }
+
+  renderDeletedList();
   ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
 });
 
@@ -2675,23 +2683,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     showWelcome();
   }
 });
-// 削除したユーザーの復元
-document.getElementById('menu-deleted-users-btn').onclick = () => {
-  const d = loadGroupData();
-  if (!d.deletedUsers || d.deletedUsers.length === 0) {
-    showToast('削除されたユーザーはいません');
-    return;
-  }
-  const userNames = d.deletedUsers.map(u => u.name).join(', ');
-  if (confirm(`以下のユーザーを復元しますか？\n${userNames}`)) {
-    d.users.push(...d.deletedUsers);
-    d.deletedUsers = [];
-    saveGroupData(d);
-    saveData();
-    renderAll();
-    showToast('✅ ユーザーを復元しました');
-  }
-};
+
 
 // 親モード（全員表示）の切り替え連動
 document.getElementById('parent-mode-toggle').addEventListener('change', (e) => {
