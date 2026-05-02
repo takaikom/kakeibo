@@ -110,10 +110,11 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
 .income-cat .cat-pick-btn.selected{border-color:var(--income-color);background:var(--income-light);color:var(--income-color);}
 .expense-cat .cat-pick-btn.selected{border-color:var(--expense-color);background:var(--expense-light);color:var(--accent-dark);}
 .form-row{display:flex;gap:8px;margin-bottom:10px;}
-.form-input{flex:1;height:42px;border:1.5px solid var(--border2);border-radius:10px;padding:0 12px;font-family:'Noto Sans JP',sans-serif;font-size:13px;color:var(--text);background:var(--bg);outline:none;transition:border-color .2s;}
+.form-row > div{flex:1;min-width:0;}
+.form-input{width:100%;height:42px;border:1.5px solid var(--border2);border-radius:10px;padding:0 12px;font-family:'Noto Sans JP',sans-serif;font-size:13px;color:var(--text);background:var(--bg);outline:none;transition:border-color .2s;box-sizing:border-box;}
 .form-input:focus{border-color:var(--accent);background:white;}
 .form-input::placeholder{color:var(--text3);}
-.date-input{height:42px;border:1.5px solid var(--border2);border-radius:10px;padding:0 10px;font-family:'DM Mono',monospace;font-size:12px;color:var(--text);background:var(--bg);outline:none;transition:border-color .2s;color-scheme:light;width:100%;}
+.date-input{height:42px;border:1.5px solid var(--border2);border-radius:10px;padding:0 10px;font-family:'DM Mono',monospace;font-size:12px;color:var(--text);background:var(--bg);outline:none;transition:border-color .2s;color-scheme:light;width:100%;box-sizing:border-box;min-width:0;}
 .date-input:focus{border-color:var(--accent);}
 .memo-input{width:100%;border:1.5px solid var(--border2);border-radius:10px;padding:9px 12px;font-family:'Noto Sans JP',sans-serif;font-size:13px;color:var(--text);background:var(--bg);outline:none;resize:none;line-height:1.5;transition:border-color .2s;height:52px;}
 .memo-input:focus{border-color:var(--accent);background:white;}
@@ -220,6 +221,17 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
 .budget-input{width:110px;height:38px;border:1.5px solid var(--border2);border-radius:10px;padding:0 10px;font-family:'DM Mono',monospace;font-size:13px;color:var(--text);background:var(--bg);outline:none;text-align:right;}
 .budget-input:focus{border-color:var(--amber);}
 .budget-yen{font-size:12px;color:var(--text3);}
+/* ── TAX TOGGLE ── */
+.tax-row{display:flex;align-items:center;gap:10px;margin-bottom:10px;padding:8px 12px;background:var(--surface2);border-radius:10px;}
+.tax-checkbox-label{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text2);cursor:pointer;user-select:none;}
+.tax-checkbox-label input[type=checkbox]{width:16px;height:16px;accent-color:var(--accent);cursor:pointer;}
+.tax-preview{font-size:11px;color:var(--text3);margin-left:auto;font-family:'DM Mono',monospace;}
+.tax-preview.active{color:var(--accent-dark);}
+/* ── TAX RATE SETTINGS ── */
+.tax-rate-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.tax-rate-name{flex:1;font-size:13px;color:var(--text2);}
+.tax-rate-input{width:80px;height:36px;border:1.5px solid var(--border2);border-radius:10px;padding:0 8px;font-family:'DM Mono',monospace;font-size:13px;color:var(--text);background:var(--bg);outline:none;text-align:right;}
+.tax-rate-input:focus{border-color:var(--accent);}
 
 /* ── グループ設定カード ── */
 .group-manage-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:10px;}
@@ -353,8 +365,18 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
       <span class="amount-prefix">¥</span>
       <input class="amount-input" id="entry-amount" type="number" min="0" placeholder="0" inputmode="numeric">
     </div>
+    <div class="tax-row" id="entry-tax-row">
+      <label class="tax-checkbox-label">
+        <input type="checkbox" id="entry-tax-toggle" onchange="updateTaxPreview()">
+        税抜き金額
+      </label>
+      <span class="tax-preview" id="entry-tax-preview"></span>
+    </div>
     <div class="form-label">カテゴリ</div>
     <div class="cat-picker expense-cat" id="entry-cat-picker"></div>
+    <div style="margin-bottom:10px;">
+      <input class="form-input" id="entry-cat-custom" type="text" placeholder="または直接入力…" maxlength="12" style="width:100%;" oninput="onEntryCatCustomInput(this.value)">
+    </div>
     <div class="form-row">
       <div style="flex:1">
         <div class="form-label">日付</div>
@@ -415,8 +437,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
 
 <!-- ══ SETTINGS TAB ══ -->
 <div id="tab-settings" class="tab-body" style="display:none;">
-  <div class="section-label">支出カテゴリ</div>
-  <div class="settings-card">
+  <div class="section-label">支出カテゴリ</div>  <div class="settings-card">
     <div class="cat-chip-list" id="expense-cat-chips"></div>
     <div class="add-row">
       <input class="text-input" id="new-expense-cat" placeholder="新しいカテゴリ名" maxlength="12">
@@ -446,6 +467,17 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
   </div>
   <div class="section-label">メンバー管理</div>
   <div class="settings-card" id="member-settings-card"></div>
+  <div class="section-label">税率設定</div>
+  <div class="settings-card" id="tax-rate-settings-card">
+    <div class="settings-card-title">カテゴリ別税率（%）</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:10px;">金額入力時に「税抜き金額」をチェックすると、登録時に税込み金額に変換されます。カテゴリごとに税率を設定してください（未設定は10%）。</div>
+    <div id="tax-rate-list"></div>
+    <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;">
+      <span style="flex:1;font-size:13px;color:var(--text2);">デフォルト税率</span>
+      <input class="tax-rate-input" id="default-tax-rate" type="number" min="0" max="100" placeholder="10" oninput="saveDefaultTaxRate(this.value)">
+      <span style="font-size:12px;color:var(--text3);">%</span>
+    </div>
+  </div>
   <div class="section-label">データ管理</div>
   <div class="settings-card">
     <button class="export-btn" onclick="exportCSV()">📄 CSV エクスポート</button>
@@ -464,7 +496,8 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
     <input class="url-input" id="gas-url-input" placeholder="https://script.google.com/macros/s/.../exec">
     <div style="display:flex;gap:8px;">
       <button class="blue-btn" style="flex:1;" id="gas-save-btn">保存</button>
-      <button class="secondary-btn" id="gas-sync-btn">今すぐ同期</button>
+      <button class="secondary-btn" id="gas-upload-btn">GASへ送信</button>
+      <button class="secondary-btn" id="gas-download-btn">GASから受信</button>
     </div>
     <div class="sync-status-text" id="gas-status-text">未設定</div>
   </div>
@@ -488,13 +521,21 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
         </label>
       </div>
       <!-- グループ設定 -->
+      <button class="menu-item" id="menu-sync-btn">
+        <div class="menu-icon" style="background:var(--blue-light);">☁️</div>
+        <div><div>GASへ送信（アップロード）</div><div class="menu-item-desc" id="menu-sync-desc">このデバイスのデータをGASに保存</div></div>
+      </button>
+      <button class="menu-item" id="menu-sync-from-btn">
+        <div class="menu-icon" style="background:var(--green-light);">⬇️</div>
+        <div><div>GASから受信（ダウンロード）</div><div class="menu-item-desc">GASのデータをこのデバイスに取り込む</div></div>
+      </button>
+      <button class="menu-item" id="menu-switch-user-btn">
+        <div class="menu-icon" style="background:var(--blue-light);">🔄</div>
+        <div><div>グループ／ユーザーを切り替える</div><div class="menu-item-desc">別のグループ・ユーザーとして使う</div></div>
+      </button>
       <button class="menu-item" id="menu-rename-group-btn">
         <div class="menu-icon" style="background:var(--blue-light);">✏️</div>
         <div><div id="menu-rename-group-label">グループ名を変更</div><div class="menu-item-desc" id="menu-group-name-desc"></div></div>
-      </button>
-      <button class="menu-item" id="menu-sync-btn">
-        <div class="menu-icon" style="background:var(--blue-light);">🔄</div>
-        <div><div>今すぐ同期</div><div class="menu-item-desc" id="menu-sync-desc">GASと手動で同期します</div></div>
       </button>
       <button class="menu-item" id="menu-delete-group-btn">
         <div class="menu-icon" style="background:var(--red-light);">🗑️</div>
@@ -502,10 +543,6 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
       </button>
       <hr class="sheet-divider">
       <!-- ユーザー設定 -->
-      <button class="menu-item" id="menu-switch-user-btn">
-        <div class="menu-icon" style="background:var(--blue-light);">🔄</div>
-        <div><div>ユーザーを切り替える</div><div class="menu-item-desc">別のユーザーとして使う（ピン変更）</div></div>
-      </button>
       <button class="menu-item" id="menu-rename-user-btn">
         <div class="menu-icon" style="background:var(--accent-light);">👤</div>
         <div><div id="menu-rename-user-label">名前を変更</div><div class="menu-item-desc">このユーザーの名前を変更</div></div>
@@ -560,7 +597,8 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
         <input class="amount-input" id="edit-amount" type="number" min="0" inputmode="numeric">
       </div>
       <div class="sheet-label">カテゴリ</div>
-      <div class="cat-picker" id="edit-cat-picker" style="margin-bottom:12px;"></div>
+      <div class="cat-picker" id="edit-cat-picker" style="margin-bottom:8px;"></div>
+      <input class="form-input" id="edit-cat-custom" type="text" placeholder="または直接入力…" maxlength="12" style="width:100%;margin-bottom:12px;" oninput="onEditCatCustomInput(this.value)">
       <div class="sheet-label">日付</div>
       <input class="date-input" id="edit-date" type="date" style="margin-bottom:12px;">
       <div class="sheet-label">摘要</div>
@@ -640,6 +678,7 @@ function newUser(id, name, isChild){
     expenseCats: isChild ? CHILD_EXPENSE_CATS.slice() : DEFAULT_EXPENSE_CATS.slice(),
     incomeCats:  isChild ? CHILD_INCOME_CATS.slice()  : DEFAULT_INCOME_CATS.slice(),
     budgets: {}, totalBudget: 0,
+    taxRates: {}, defaultTaxRate: 10,
     transactions: []
   };
 }
@@ -668,6 +707,8 @@ function getTransactions(){return getCurrentUser().transactions||[];}
 function getExpenseCats(){return getCurrentUser().expenseCats||DEFAULT_EXPENSE_CATS.slice();}
 function getIncomeCats(){return getCurrentUser().incomeCats||DEFAULT_INCOME_CATS.slice();}
 function getUserBudgets(){const u=getCurrentUser();return{budgets:u.budgets||{},totalBudget:u.totalBudget||0,budgetDisplayItems:u.budgetDisplayItems||null};}
+function getUserTaxRates(){const u=getCurrentUser();return{taxRates:u.taxRates||{},defaultTaxRate:u.defaultTaxRate!=null?u.defaultTaxRate:10};}
+function getTaxRateForCat(cat){const{taxRates,defaultTaxRate}=getUserTaxRates();return taxRates[cat]!=null?taxRates[cat]:defaultTaxRate;}
 
 function mutateUser(fn){
   const d=loadGroupData();
@@ -967,24 +1008,82 @@ function renderEntryCatPicker(){
   picker.innerHTML=cats.map(c=>
     `<button class="cat-pick-btn${entrySelectedCat===c?' selected':''}" onclick="selectEntryCat('${esc(c)}')">${esc(c)}</button>`
   ).join('');
+  // 直接入力欄と税率行はexpenseのみ表示
+  const taxRow=document.getElementById('entry-tax-row');
+  if(taxRow)taxRow.style.display=entryType==='expense'?'':'none';
+  updateTaxPreview();
 }
 
-function selectEntryCat(cat){entrySelectedCat=cat;renderEntryCatPicker();}
+function selectEntryCat(cat){
+  entrySelectedCat=cat;
+  const customInput=document.getElementById('entry-cat-custom');
+  if(customInput)customInput.value='';
+  renderEntryCatPicker();
+  updateTaxPreview();
+}
+
+function onEntryCatCustomInput(val){
+  if(val.trim()){
+    // カスタム入力中はボタン選択を外す
+    entrySelectedCat='__custom__';
+    renderEntryCatPicker();
+  } else {
+    entrySelectedCat='';
+    renderEntryCatPicker();
+  }
+  updateTaxPreview();
+}
+
+function getEffectiveEntryCat(){
+  if(entrySelectedCat==='__custom__'){
+    const v=document.getElementById('entry-cat-custom')?.value.trim();
+    return v||'';
+  }
+  return entrySelectedCat;
+}
+
+function updateTaxPreview(){
+  const toggle=document.getElementById('entry-tax-toggle');
+  const preview=document.getElementById('entry-tax-preview');
+  if(!toggle||!preview)return;
+  const amtVal=document.getElementById('entry-amount')?.value;
+  const amt=parseInt(amtVal,10);
+  if(toggle.checked&&amt>0){
+    const cat=getEffectiveEntryCat();
+    const rate=getTaxRateForCat(cat||'');
+    const taxed=Math.round(amt*(1+rate/100));
+    preview.textContent=`→ 税込 ¥${fmtAmt(taxed)}（${rate}%）`;
+    preview.className='tax-preview active';
+  }else{
+    preview.textContent='';
+    preview.className='tax-preview';
+  }
+}
 
 function submitEntry(){
-  const amount=parseInt(document.getElementById('entry-amount').value,10);
+  let amount=parseInt(document.getElementById('entry-amount').value,10);
   if(!amount||amount<=0){showToast('⚠ 金額を入力してください');return;}
-  if(!entrySelectedCat){showToast('⚠ カテゴリを選択してください');return;}
+  const cat=getEffectiveEntryCat();
+  if(!cat){showToast('⚠ カテゴリを選択または入力してください');return;}
+  // 税抜きチェック
+  const taxToggle=document.getElementById('entry-tax-toggle');
+  if(taxToggle&&taxToggle.checked&&entryType==='expense'){
+    const rate=getTaxRateForCat(cat);
+    amount=Math.round(amount*(1+rate/100));
+  }
   const date=document.getElementById('entry-date').value||todayISO();
   const desc=document.getElementById('entry-desc').value.trim();
   const memo=document.getElementById('entry-memo').value.trim();
-  const tx={id:Date.now(),type:entryType,amount,category:entrySelectedCat,date,desc,memo};
+  const tx={id:Date.now(),type:entryType,amount,category:cat,date,desc,memo};
   mutateUser(u=>{if(!u.transactions)u.transactions=[];u.transactions.push(tx);});
   saveData();
   document.getElementById('entry-amount').value='';
   document.getElementById('entry-desc').value='';
   document.getElementById('entry-memo').value='';
+  const customInput=document.getElementById('entry-cat-custom');
+  if(customInput)customInput.value='';
   entrySelectedCat='';renderEntryCatPicker();
+  updateTaxPreview();
   renderHomeSummary();renderHomeBudget();renderHomeRecent();
   showToast(entryType==='expense'?'💸 支出を登録しました':'💰 収入を登録しました');
 }
@@ -1068,8 +1167,8 @@ function renderHomeBudget(){
     </div>
     ${showTotal&&totalBudget>0?`<div class="budget-item">
       <div class="budget-item-row">
-        <span class="budget-item-name">支出合計</span>
-        <span class="budget-item-nums${totalOver?' over':''}">¥${fmtAmt(totalExpense)} / ¥${fmtAmt(totalBudget)}</span>
+        <span class="budget-item-name">残高</span>
+        <span class="budget-item-nums${totalOver?' over':''}">¥${fmtAmt(totalBudget - totalExpense)} <span style="font-size:10px;color:var(--text3);">（予算¥${fmtAmt(totalBudget)}）</span></span>
       </div>
       <div class="bar-track"><div class="bar-fill ${totalOver?'over-bar':'expense-bar'}" style="width:${totalPct.toFixed(1)}%"></div></div>
     </div>`:''}
@@ -1328,7 +1427,40 @@ function renderSettings(){
   renderCatChips('income');
   renderBudgetSettings();
   renderMemberSettings();
+  renderTaxRateSettings();
   refreshGasStatus();
+}
+
+function renderTaxRateSettings(){
+  const{taxRates,defaultTaxRate}=getUserTaxRates();
+  const cats=getExpenseCats();
+  const el=document.getElementById('tax-rate-list');
+  if(!el)return;
+  el.innerHTML=cats.map(cat=>{
+    const rate=taxRates[cat]!=null?taxRates[cat]:'';
+    return`<div class="tax-rate-row">
+      <span class="tax-rate-name">${esc(cat)}</span>
+      <input class="tax-rate-input" data-cat="${esc(cat)}" type="number" min="0" max="100" placeholder="${defaultTaxRate}" value="${rate}" onchange="saveCatTaxRate('${esc(cat)}',this.value)">
+      <span style="font-size:12px;color:var(--text3);">%</span>
+    </div>`;
+  }).join('');
+  const defInput=document.getElementById('default-tax-rate');
+  if(defInput)defInput.value=defaultTaxRate;
+}
+
+function saveCatTaxRate(cat,val){
+  const rate=parseFloat(val);
+  mutateUser(u=>{
+    if(!u.taxRates)u.taxRates={};
+    if(isNaN(rate)||val===''){delete u.taxRates[cat];}
+    else{u.taxRates[cat]=rate;}
+  });
+}
+
+function saveDefaultTaxRate(val){
+  const rate=parseFloat(val);
+  mutateUser(u=>{u.defaultTaxRate=isNaN(rate)?10:rate;});
+  updateTaxPreview();
 }
 
 function renderCatChips(type){
@@ -1490,7 +1622,16 @@ function openEdit(id){
   document.getElementById('edit-date').value=tx.date;
   document.getElementById('edit-desc').value=tx.desc||'';
   document.getElementById('edit-memo').value=tx.memo||'';
-  renderEditCatPicker(tx.category);
+  // カテゴリ: 既存リストにあればボタン選択、なければ直接入力欄にセット
+  const cats=editType==='expense'?getExpenseCats():getIncomeCats();
+  const customInput=document.getElementById('edit-cat-custom');
+  if(cats.includes(tx.category)){
+    if(customInput)customInput.value='';
+    renderEditCatPicker(tx.category);
+  }else{
+    if(customInput)customInput.value=tx.category||'';
+    renderEditCatPicker('');
+  }
   document.getElementById('edit-sheet').classList.add('open');
 }
 function setEditType(type){
@@ -1505,15 +1646,31 @@ function renderEditCatPicker(selected){
   el.className='cat-picker '+(editType==='expense'?'expense-cat':'income-cat');
   el.innerHTML=cats.map(c=>`<button class="cat-pick-btn${selected===c?' selected':''}" onclick="selectEditCat('${esc(c)}')">${esc(c)}</button>`).join('');
 }
-function selectEditCat(cat){renderEditCatPicker(cat);}
+function selectEditCat(cat){
+  const customInput=document.getElementById('edit-cat-custom');
+  if(customInput)customInput.value='';
+  renderEditCatPicker(cat);
+}
+function onEditCatCustomInput(val){
+  if(val.trim()){
+    // カスタム入力中は既存選択を解除
+    renderEditCatPicker('');
+  }
+}
+function getEffectiveEditCat(){
+  const customInput=document.getElementById('edit-cat-custom');
+  const customVal=customInput?.value.trim();
+  if(customVal)return customVal;
+  const selBtn=document.getElementById('edit-cat-picker').querySelector('.cat-pick-btn.selected');
+  return selBtn?selBtn.textContent:'';
+}
 function closeEditSheet(){document.getElementById('edit-sheet').classList.remove('open');}
 document.getElementById('edit-sheet').addEventListener('click',e=>{if(e.target.id==='edit-sheet')closeEditSheet();});
 function saveEdit(){
   const amount=parseInt(document.getElementById('edit-amount').value,10);
   if(!amount||amount<=0){showToast('⚠ 金額を入力してください');return;}
-  const selBtn=document.getElementById('edit-cat-picker').querySelector('.cat-pick-btn.selected');
-  if(!selBtn){showToast('⚠ カテゴリを選択してください');return;}
-  const cat=selBtn.textContent;
+  const cat=getEffectiveEditCat();
+  if(!cat){showToast('⚠ カテゴリを選択または入力してください');return;}
   const date=document.getElementById('edit-date').value;
   const desc=document.getElementById('edit-desc').value.trim();
   const memo=document.getElementById('edit-memo').value.trim();
@@ -1595,8 +1752,18 @@ function closeMenu(){document.getElementById('menu-sheet').classList.remove('ope
 document.getElementById('menu-sheet').addEventListener('click',e=>{if(e.target.id==='menu-sheet')closeMenu();});
 document.getElementById('menu-close-btn').addEventListener('click',closeMenu);
 
-// 今すぐ同期
+// GASへ送信（アップロード）
 document.getElementById('menu-sync-btn').addEventListener('click',async()=>{
+  closeMenu();
+  if(!getGroupGasUrl()){showToast('⚠ GAS URLが設定されていません');return;}
+  setSyncDot('syncing');
+  const local=loadGroupData();const cg=getCurrentGroup();
+  const ok=await remoteSave(cg?{...local,groupName:cg.name}:local);
+  if(ok)showToast('☁️ GASへ送信しました');else showToast('⚠ 送信に失敗しました');
+});
+
+// GASから受信（ダウンロード）
+document.getElementById('menu-sync-from-btn').addEventListener('click',async()=>{
   closeMenu();
   if(!getGroupGasUrl()){showToast('⚠ GAS URLが設定されていません');return;}
   await syncFromRemote(false);
@@ -1823,7 +1990,14 @@ document.getElementById('gas-save-btn').addEventListener('click',async()=>{
   }else{showToast('GAS URLをクリアしました');}
   renderGroupTabs();
 });
-document.getElementById('gas-sync-btn').addEventListener('click',async()=>{
+document.getElementById('gas-upload-btn').addEventListener('click',async()=>{
+  if(!getGroupGasUrl()){showToast('⚠ GAS URLを先に設定してください');return;}
+  setSyncDot('syncing');
+  const local=loadGroupData();const cg=getCurrentGroup();
+  const ok=await remoteSave(cg?{...local,groupName:cg.name}:local);
+  if(ok)showToast('☁️ GASへ送信しました');else showToast('⚠ 送信に失敗しました');
+});
+document.getElementById('gas-download-btn').addEventListener('click',async()=>{
   if(!getGroupGasUrl()){showToast('⚠ GAS URLを先に設定してください');return;}
   await syncFromRemote(false);
 });
@@ -2021,6 +2195,9 @@ ensureDefaultGroup();
   }
   document.getElementById('entry-date').value=todayISO();
 })();
+
+// 金額入力変更時に税プレビュー更新
+document.getElementById('entry-amount').addEventListener('input',updateTaxPreview);
 
 // バックグラウンド復帰対応
 document.addEventListener('visibilitychange',()=>{
