@@ -283,12 +283,19 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
 /* ── SETTINGS ── */
 .settings-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:12px;}
 .settings-card-title{font-size:13px;font-weight:700;margin-bottom:12px;color:var(--text2);}
-.cat-chip{display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;border:1.5px solid var(--border2);background:var(--surface2);font-size:13px;color:var(--text2);cursor:grab;user-select:none;transition:opacity .15s,box-shadow .15s;}
-.cat-chip.chip-dragging{opacity:.3;cursor:grabbing;}
-.cat-chip-list{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;position:relative;}
-.chip-drop-indicator{position:absolute;width:2.5px;background:var(--accent);border-radius:2px;pointer-events:none;z-index:10;box-shadow:0 0 0 1.5px var(--accent-light);display:none;}
-.cat-chip-del{background:none;border:none;color:var(--text3);font-size:14px;cursor:pointer;line-height:1;padding:0;}
-.cat-chip-del:active{color:var(--red-mid);}
+/* ── SORTABLE LIST (カテゴリ並び替え) ── */
+.sort-list-wrap{display:flex;gap:8px;margin-bottom:14px;align-items:stretch;}
+.sort-list{flex:1;min-width:0;border:1.5px solid var(--border2);border-radius:10px;overflow:hidden;}
+.sort-list-item{display:flex;align-items:center;gap:8px;padding:9px 12px;font-size:13px;color:var(--text2);background:var(--surface);border-bottom:1px solid var(--border);cursor:pointer;-webkit-tap-highlight-color:transparent;user-select:none;}
+.sort-list-item:last-child{border-bottom:none;}
+.sort-list-item.selected{background:var(--accent-light);color:var(--accent-dark);font-weight:600;}
+.sort-list-item-icon{font-size:15px;flex-shrink:0;width:22px;text-align:center;}
+.sort-list-item-del{margin-left:auto;background:none;border:none;color:var(--text3);font-size:14px;cursor:pointer;padding:2px 4px;flex-shrink:0;border-radius:4px;-webkit-tap-highlight-color:transparent;}
+.sort-list-item-del:active{color:var(--red-mid);background:var(--red-light);}
+.sort-list-btns{display:flex;flex-direction:column;gap:6px;justify-content:center;}
+.sort-move-btn{width:36px;height:36px;border-radius:10px;border:1.5px solid var(--border2);background:var(--surface);color:var(--text2);font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;flex-shrink:0;}
+.sort-move-btn:active{background:var(--accent-light);color:var(--accent-dark);border-color:var(--accent);}
+.sort-move-btn:disabled{opacity:.25;cursor:default;background:var(--surface2);}
 .add-row{display:flex;gap:8px;flex-wrap:nowrap;align-items:center;}
 .text-input{flex:1;min-width:0;height:42px;border:1.5px solid var(--border2);border-radius:10px;padding:0 12px;font-family:'Noto Sans JP',sans-serif;font-size:14px;color:var(--text);background:var(--bg);outline:none;transition:border-color .2s;}
 .text-input:focus{border-color:var(--accent);background:white;}
@@ -1928,6 +1935,84 @@ function saveDefaultTaxRate(val){
   updateTaxPreview();
 }
 
+// 選択＋上下ボタンで並び替えるリスト
+function makeSortableList(listEl, upBtn, downBtn, getItems, saveItems, onAfterDelete){
+  let selectedIdx = null;
+
+  function render(){
+    const items = getItems();
+    listEl.innerHTML = '';
+    items.forEach((item, i) => {
+      const row = document.createElement('div');
+      row.className = 'sort-list-item' + (i === selectedIdx ? ' selected' : '');
+      const icon = CAT_ICONS[item] || '📌';
+      row.innerHTML = `<span class="sort-list-item-icon">${icon}</span><span>${esc(item)}</span><button class="sort-list-item-del" data-idx="${i}">✕</button>`;
+      row.addEventListener('click', e => {
+        if(e.target.classList.contains('sort-list-item-del')) return;
+        selectedIdx = (selectedIdx === i) ? null : i;
+        render();
+      });
+      row.querySelector('.sort-list-item-del').addEventListener('click', e => {
+        e.stopPropagation();
+        const its = getItems();
+        its.splice(i, 1);
+        if(selectedIdx !== null){
+          if(selectedIdx === i) selectedIdx = null;
+          else if(selectedIdx > i) selectedIdx--;
+        }
+        saveItems(its); onAfterDelete();
+      });
+      listEl.appendChild(row);
+    });
+    const n = items.length;
+    upBtn.disabled   = (selectedIdx === null || selectedIdx === 0);
+    downBtn.disabled = (selectedIdx === null || selectedIdx === n - 1);
+  }
+
+  upBtn.addEventListener('click', () => {
+    if(selectedIdx === null || selectedIdx === 0) return;
+    const its = getItems();
+    [its[selectedIdx-1], its[selectedIdx]] = [its[selectedIdx], its[selectedIdx-1]];
+    selectedIdx--;
+    saveItems(its);
+    render();
+    renderEntryCatPicker(); // ホーム画面のカテゴリピッカーに反映
+  });
+  downBtn.addEventListener('click', () => {
+    const its = getItems();
+    if(selectedIdx === null || selectedIdx === its.length-1) return;
+    [its[selectedIdx], its[selectedIdx+1]] = [its[selectedIdx+1], its[selectedIdx]];
+    selectedIdx++;
+    saveItems(its);
+    render();
+    renderEntryCatPicker(); // ホーム画面のカテゴリピッカーに反映
+  });
+
+  render();
+  return { reset(){ selectedIdx=null; render(); } };
+}
+
+function makeArrowMoveChips(el,getItems,saveItems,onAfter){
+  // 矢印ボタンで1つずつ移動する方式
+  el.addEventListener('click',e=>{
+    const btn=e.target.closest('.cat-chip-move');
+    if(!btn)return;
+    const chip=btn.closest('.cat-chip');
+    if(!chip)return;
+    const chips=[...el.querySelectorAll('.cat-chip')];
+    const idx=chips.indexOf(chip);
+    const dir=btn.dataset.dir; // 'prev' or 'next'
+    const items=getItems();
+    if(dir==='prev'&&idx>0){
+      [items[idx-1],items[idx]]=[items[idx],items[idx-1]];
+      saveItems(items);onAfter();
+    }else if(dir==='next'&&idx<items.length-1){
+      [items[idx],items[idx+1]]=[items[idx+1],items[idx]];
+      saveItems(items);onAfter();
+    }
+  });
+}
+
 function makeSortableChips(el,getItems,saveItems,onAfter){
   // タッチ長押し＋ドラッグで並び替え（挿入位置方式）
   let dragIdx=null,ghost=null,offX=0,offY=0,lpTimer=null,dragging=false,sx=0,sy=0;
@@ -2069,23 +2154,41 @@ function makeSortableChips(el,getItems,saveItems,onAfter){
 }
 
 function renderCatChips(type){
-  const cats=type==='expense'?getExpenseCats():getIncomeCats();
-  const el=document.getElementById(type+'-cat-chips');
-  el.innerHTML=cats.map(c=>`<div class="cat-chip"><span>${esc(c)}</span><button class="cat-chip-del" data-cat="${esc(c)}" data-type="${type}">✕</button></div>`).join('');
-  el.querySelectorAll('.cat-chip-del').forEach(btn=>{
-    btn.addEventListener('click',()=>{
-      mutateUser(u=>{
-        if(type==='expense')u.expenseCats=u.expenseCats.filter(c=>c!==btn.dataset.cat);
-        else u.incomeCats=u.incomeCats.filter(c=>c!==btn.dataset.cat);
-      });
-      renderSettings();showToast('カテゴリを削除しました');
-    });
-  });
-  makeSortableChips(el,
-    ()=>type==='expense'?getExpenseCats():getIncomeCats(),
-    items=>mutateUser(u=>{if(type==='expense')u.expenseCats=items;else u.incomeCats=items;}),
-    ()=>{renderSettings();renderEntryCatPicker();}
-  );
+  const wrap = document.getElementById(type+'-cat-chips');
+  // 初回のみ外枠（リスト＋ボタン）を組み立てる
+  if(!wrap.querySelector('.sort-list')){
+    wrap.className = 'sort-list-wrap';
+    wrap.innerHTML =
+      '<div class="sort-list"></div>' +
+      '<div class="sort-list-btns">' +
+        '<button class="sort-move-btn" data-dir="up" title="上へ">▲</button>' +
+        '<button class="sort-move-btn" data-dir="down" title="下へ">▼</button>' +
+      '</div>';
+    const listEl  = wrap.querySelector('.sort-list');
+    const upBtn   = wrap.querySelector('[data-dir="up"]');
+    const downBtn = wrap.querySelector('[data-dir="down"]');
+    makeSortableList(
+      listEl, upBtn, downBtn,
+      ()=>type==='expense'?getExpenseCats():getIncomeCats(),
+      items=>mutateUser(u=>{if(type==='expense')u.expenseCats=items;else u.incomeCats=items;}),
+      ()=>{renderEntryCatPicker(); renderCatChips(type);}
+    );
+  } else {
+    // 2回目以降：リストの中身だけ再描画（▲▼ボタンにバインドされたインスタンスは維持）
+    // → makeSortableList の render() を外から呼べないので、同じ引数で再初期化する
+    const listEl  = wrap.querySelector('.sort-list');
+    const upBtn   = wrap.querySelector('[data-dir="up"]');
+    const downBtn = wrap.querySelector('[data-dir="down"]');
+    // 古いイベントリスナーをリセットするためボタンを複製して差し替え
+    const newUp = upBtn.cloneNode(true); upBtn.replaceWith(newUp);
+    const newDown = downBtn.cloneNode(true); downBtn.replaceWith(newDown);
+    makeSortableList(
+      listEl, newUp, newDown,
+      ()=>type==='expense'?getExpenseCats():getIncomeCats(),
+      items=>mutateUser(u=>{if(type==='expense')u.expenseCats=items;else u.incomeCats=items;}),
+      ()=>{renderEntryCatPicker(); renderCatChips(type);}
+    );
+  }
 }
 
 function addCat(type){
@@ -2105,24 +2208,38 @@ document.getElementById('new-income-cat').addEventListener('keydown',e=>{if(e.ke
 // ACCOUNT SETTINGS
 // ════════════════════════════════════════
 function renderAccountChips(type){
-  const accounts=type==='expense'?getExpenseAccounts():getIncomeAccounts();
-  const el=document.getElementById(type+'-account-chips');
-  if(!el)return;
-  el.innerHTML=accounts.map(a=>`<div class="cat-chip"><span>${esc(a)}</span><button class="cat-chip-del" data-acc="${esc(a)}" data-atype="${type}">✕</button></div>`).join('');
-  el.querySelectorAll('.cat-chip-del').forEach(btn=>{
-    btn.addEventListener('click',()=>{
-      mutateUser(u=>{
-        if(type==='expense')u.expenseAccounts=(u.expenseAccounts||DEFAULT_EXPENSE_ACCOUNTS.slice()).filter(a=>a!==btn.dataset.acc);
-        else u.incomeAccounts=(u.incomeAccounts||DEFAULT_INCOME_ACCOUNTS.slice()).filter(a=>a!==btn.dataset.acc);
-      });
-      renderSettings();renderEntryAccountPicker();showToast('勘定科目を削除しました');
-    });
-  });
-  makeSortableChips(el,
-    ()=>type==='expense'?getExpenseAccounts():getIncomeAccounts(),
-    items=>mutateUser(u=>{if(type==='expense')u.expenseAccounts=items;else u.incomeAccounts=items;}),
-    ()=>{renderSettings();renderEntryAccountPicker();}
-  );
+  const wrap = document.getElementById(type+'-account-chips');
+  if(!wrap) return;
+  if(!wrap.querySelector('.sort-list')){
+    wrap.className = 'sort-list-wrap';
+    wrap.innerHTML =
+      '<div class="sort-list"></div>' +
+      '<div class="sort-list-btns">' +
+        '<button class="sort-move-btn" data-dir="up" title="上へ">▲</button>' +
+        '<button class="sort-move-btn" data-dir="down" title="下へ">▼</button>' +
+      '</div>';
+    const listEl  = wrap.querySelector('.sort-list');
+    const upBtn   = wrap.querySelector('[data-dir="up"]');
+    const downBtn = wrap.querySelector('[data-dir="down"]');
+    makeSortableList(
+      listEl, upBtn, downBtn,
+      ()=>type==='expense'?getExpenseAccounts():getIncomeAccounts(),
+      items=>mutateUser(u=>{if(type==='expense')u.expenseAccounts=items;else u.incomeAccounts=items;}),
+      ()=>{renderEntryAccountPicker(); renderAccountChips(type);}
+    );
+  } else {
+    const listEl  = wrap.querySelector('.sort-list');
+    const upBtn   = wrap.querySelector('[data-dir="up"]');
+    const downBtn = wrap.querySelector('[data-dir="down"]');
+    const newUp = upBtn.cloneNode(true); upBtn.replaceWith(newUp);
+    const newDown = downBtn.cloneNode(true); downBtn.replaceWith(newDown);
+    makeSortableList(
+      listEl, newUp, newDown,
+      ()=>type==='expense'?getExpenseAccounts():getIncomeAccounts(),
+      items=>mutateUser(u=>{if(type==='expense')u.expenseAccounts=items;else u.incomeAccounts=items;}),
+      ()=>{renderEntryAccountPicker(); renderAccountChips(type);}
+    );
+  }
 }
 
 function addAccount(type){
