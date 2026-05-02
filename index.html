@@ -55,8 +55,9 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
 .user-tab.is-me{background:var(--accent-light);color:var(--accent-dark);}
 .user-tab.is-me.active{color:var(--accent-dark);border-bottom-color:var(--accent);}
 .user-tab.drag-dragging{opacity:0.35;background:var(--surface2);}
-.user-tab.drag-over{border-bottom:2.5px solid var(--blue);color:var(--blue);}
 .user-tab-ghost{position:fixed;pointer-events:none;z-index:9999;padding:8px 14px;font-size:13px;font-weight:700;color:var(--accent);background:var(--accent-light);border:1.5px solid var(--accent);border-radius:8px;white-space:nowrap;font-family:'Noto Sans JP',sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.18);opacity:.92;}
+.user-tab-drop-indicator{position:absolute;top:4px;bottom:4px;width:2.5px;background:var(--blue);border-radius:2px;pointer-events:none;z-index:10;transition:left .07s;box-shadow:0 0 0 1.5px var(--blue-light);}
+#user-tabs{position:relative;}
 .add-user-btn{flex-shrink:0;width:26px;height:26px;border-radius:50%;border:1.5px dashed var(--border2);background:transparent;color:var(--text3);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;margin-left:6px;-webkit-tap-highlight-color:transparent;}
 
 /* ── MAIN TABS ── */
@@ -282,10 +283,10 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
 /* ── SETTINGS ── */
 .settings-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;margin-bottom:12px;}
 .settings-card-title{font-size:13px;font-weight:700;margin-bottom:12px;color:var(--text2);}
-.cat-chip-list{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;}
 .cat-chip{display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;border:1.5px solid var(--border2);background:var(--surface2);font-size:13px;color:var(--text2);cursor:grab;user-select:none;transition:opacity .15s,box-shadow .15s;}
 .cat-chip.chip-dragging{opacity:.3;cursor:grabbing;}
-.cat-chip.chip-drag-over{box-shadow:inset 2px 0 0 var(--accent),0 0 0 1.5px var(--accent);}
+.cat-chip-list{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;position:relative;}
+.chip-drop-indicator{position:absolute;width:2.5px;background:var(--accent);border-radius:2px;pointer-events:none;z-index:10;box-shadow:0 0 0 1.5px var(--accent-light);display:none;}
 .cat-chip-del{background:none;border:none;color:var(--text3);font-size:14px;cursor:pointer;line-height:1;padding:0;}
 .cat-chip-del:active{color:var(--red-mid);}
 .add-row{display:flex;gap:8px;flex-wrap:nowrap;align-items:center;}
@@ -1051,14 +1052,16 @@ function renderUserTabs(){
   const visibleUsers=parent?d.users:d.users.filter(u=>u.id===pinnedId||(!pinnedId&&u===d.users[0]));
 
   // ── ドラッグ状態 ──
-  let dragSrcId=null;   // ドラッグ中のユーザーID
-  let ghost=null;       // 追随する幽霊要素
-  let dragOffX=0,dragOffY=0; // タッチ開始時のオフセット
-  let longPressTimer=null;   // 長押し判定タイマー
+  let dragSrcIdx=null;  // ドラッグ中のユーザーのインデックス
+  let ghost=null;
+  let dragOffX=0,dragOffY=0;
+  let longPressTimer=null;
   let isDragging=false;
   let startX=0,startY=0;
+  let dropIndicator=null; // 縦棒インジケーター
+  let insertIdx=null;     // 挿入位置インデックス（0〜tabs数）
 
-  function getTabById(uid){return tabs.querySelector(`[data-uid="${uid}"]`);}
+  function getTabBtns(){return [...tabs.querySelectorAll('[data-uid]')];}
 
   function moveGhost(x,y){
     if(!ghost)return;
@@ -1066,43 +1069,97 @@ function renderUserTabs(){
     ghost.style.top=(y-dragOffY)+'px';
   }
 
-  function getTargetUid(x,y){
-    // ゴーストを一時隠して elementFromPoint で下の要素を取得
-    if(ghost)ghost.style.display='none';
-    const el=document.elementFromPoint(x,y);
-    if(ghost)ghost.style.display='';
-    if(!el)return null;
-    const btn=el.closest('[data-uid]');
-    return btn?btn.dataset.uid:null;
+  // x座標から挿入位置インデックスを計算（0=先頭の前、n=末尾の後）
+  function getInsertIdx(cx){
+    const btns=getTabBtns();
+    const tabsRect=tabs.getBoundingClientRect();
+    const scrollLeft=tabs.scrollLeft;
+    const cx_abs=cx-tabsRect.left+scrollLeft; // スクロール考慮した絶対X
+    let best=btns.length; // デフォルトは末尾
+    for(let i=0;i<btns.length;i++){
+      const r=btns[i].getBoundingClientRect();
+      const mid=(r.left+r.right)/2-tabsRect.left+scrollLeft;
+      if(cx_abs<mid){best=i;break;}
+    }
+    return best;
   }
 
-  function applyOrder(srcId,tgtId){
-    if(!srcId||!tgtId||srcId===tgtId)return;
-    mutateUser_global(srcId,tgtId);
+  function showDropIndicator(insertPos){
+    if(!dropIndicator){
+      dropIndicator=document.createElement('div');
+      dropIndicator.className='user-tab-drop-indicator';
+      tabs.appendChild(dropIndicator);
+    }
+    const btns=getTabBtns();
+    const tabsRect=tabs.getBoundingClientRect();
+    const scrollLeft=tabs.scrollLeft;
+    let x;
+    if(btns.length===0){
+      x=8;
+    }else if(insertPos<=0){
+      const r=btns[0].getBoundingClientRect();
+      x=r.left-tabsRect.left+scrollLeft-3;
+    }else if(insertPos>=btns.length){
+      const r=btns[btns.length-1].getBoundingClientRect();
+      x=r.right-tabsRect.left+scrollLeft+1;
+    }else{
+      const rPrev=btns[insertPos-1].getBoundingClientRect();
+      const rNext=btns[insertPos].getBoundingClientRect();
+      x=(rPrev.right+rNext.left)/2-tabsRect.left+scrollLeft;
+    }
+    dropIndicator.style.left=x+'px';
+    dropIndicator.style.display='block';
   }
 
-  function endDrag(finalX,finalY){
+  function hideDropIndicator(){
+    if(dropIndicator){dropIndicator.style.display='none';}
+  }
+
+  function applyInsert(srcIdx,toIdx){
+    if(srcIdx===null||toIdx===null)return;
+    const d=loadGroupData();
+    const users=d.users;
+    // visibleUsersのインデックスをd.usersのインデックスに変換
+    const srcUser=visibleUsers[srcIdx];
+    const si=users.findIndex(u=>u.id===srcUser.id);
+    if(si<0)return;
+    const [moved]=users.splice(si,1);
+    // 削除後、再度挿入位置を計算
+    // visibleUsersのtoIdxをd.usersの位置に変換（削除後）
+    let insertBefore=toIdx<visibleUsers.length?visibleUsers[toIdx]:null;
+    if(!insertBefore){
+      users.push(moved);
+    }else{
+      // 移動先の手前のユーザーの位置を探す
+      let ti=users.findIndex(u=>u.id===insertBefore.id);
+      if(ti<0)users.push(moved);
+      else users.splice(ti,0,moved);
+    }
+    saveGroupData(d);
+    saveData();
+  }
+
+  function endDrag(finalX){
     if(!isDragging){
-      // 長押しタイマーをキャンセルして通常クリック扱い
-      clearTimeout(longPressTimer);
-      longPressTimer=null;
+      clearTimeout(longPressTimer);longPressTimer=null;
       return;
     }
     isDragging=false;
-    const tgtId=getTargetUid(finalX,finalY);
+    hideDropIndicator();
     if(ghost){ghost.remove();ghost=null;}
-    tabs.querySelectorAll('.drag-dragging,.drag-over').forEach(el=>{
-      el.classList.remove('drag-dragging','drag-over');
-    });
-    if(tgtId&&tgtId!==dragSrcId){
-      applyOrder(dragSrcId,tgtId);
+    tabs.querySelectorAll('.drag-dragging').forEach(el=>el.classList.remove('drag-dragging'));
+    const toIdx=insertIdx;
+    // 挿入位置が元の位置と変わらない場合はキャンセル
+    const moved=(toIdx!==null&&toIdx!==dragSrcIdx&&toIdx!==dragSrcIdx+1);
+    if(moved){
+      applyInsert(dragSrcIdx,toIdx>dragSrcIdx?toIdx-1:toIdx); // splice後インデックス補正
       renderAll();
       showToast('✅ 並び順を変更しました');
     }
-    dragSrcId=null;
+    dragSrcIdx=null;insertIdx=null;
   }
 
-  visibleUsers.forEach(u=>{
+  visibleUsers.forEach((u,uIdx)=>{
     const btn=document.createElement('button');
     const isMe=parent&&u.id===pinnedId;
     btn.className='user-tab'+(u.id===curUid?' active':'')+(isMe?' is-me':'');
@@ -1113,10 +1170,9 @@ function renderUserTabs(){
     btn.addEventListener('touchstart',e=>{
       startX=e.touches[0].clientX;
       startY=e.touches[0].clientY;
-      dragSrcId=u.id;
+      dragSrcIdx=uIdx;
       isDragging=false;
       longPressTimer=setTimeout(()=>{
-        // 長押し確定 → ドラッグ開始
         isDragging=true;
         const rect=btn.getBoundingClientRect();
         dragOffX=startX-rect.left;
@@ -1127,34 +1183,28 @@ function renderUserTabs(){
         ghost.textContent=btn.textContent;
         document.body.appendChild(ghost);
         moveGhost(startX,startY);
-        // 軽い振動フィードバック
+        insertIdx=getInsertIdx(startX);
+        showDropIndicator(insertIdx);
         if(navigator.vibrate)navigator.vibrate(40);
       },400);
     },{passive:true});
 
     btn.addEventListener('touchmove',e=>{
       const cx=e.touches[0].clientX,cy=e.touches[0].clientY;
-      // 指が大きく動いたら長押しキャンセル
       if(!isDragging&&(Math.abs(cx-startX)>6||Math.abs(cy-startY)>6)){
-        clearTimeout(longPressTimer);longPressTimer=null;dragSrcId=null;
+        clearTimeout(longPressTimer);longPressTimer=null;dragSrcIdx=null;
         return;
       }
       if(!isDragging)return;
       e.preventDefault();
       moveGhost(cx,cy);
-      // ホバー先を強調
-      tabs.querySelectorAll('.drag-over').forEach(el=>el.classList.remove('drag-over'));
-      const tgtId=getTargetUid(cx,cy);
-      if(tgtId&&tgtId!==dragSrcId){
-        const tgtBtn=getTabById(tgtId);
-        if(tgtBtn)tgtBtn.classList.add('drag-over');
-      }
+      insertIdx=getInsertIdx(cx);
+      showDropIndicator(insertIdx);
     },{passive:false});
 
     btn.addEventListener('touchend',e=>{
       clearTimeout(longPressTimer);longPressTimer=null;
       if(!isDragging){
-        // 長押しなし → 通常タップ（ユーザー切り替え）
         if(u.id!==getCurrentUserId()){
           entryType='expense';entrySelectedCat='';
           setCurrentUserId(u.id);renderAll();
@@ -1162,21 +1212,22 @@ function renderUserTabs(){
         return;
       }
       const t=e.changedTouches[0];
-      endDrag(t.clientX,t.clientY);
+      endDrag(t.clientX);
     },{passive:true});
 
     btn.addEventListener('touchcancel',()=>{
       clearTimeout(longPressTimer);longPressTimer=null;
       if(ghost){ghost.remove();ghost=null;}
-      tabs.querySelectorAll('.drag-dragging,.drag-over').forEach(el=>el.classList.remove('drag-dragging','drag-over'));
-      isDragging=false;dragSrcId=null;
+      hideDropIndicator();
+      tabs.querySelectorAll('.drag-dragging').forEach(el=>el.classList.remove('drag-dragging'));
+      isDragging=false;dragSrcIdx=null;insertIdx=null;
     },{passive:true});
 
     // ── マウス操作 ──
     btn.addEventListener('mousedown',e=>{
       if(e.button!==0)return;
       startX=e.clientX;startY=e.clientY;
-      dragSrcId=u.id;isDragging=false;
+      dragSrcIdx=uIdx;isDragging=false;
       longPressTimer=setTimeout(()=>{
         isDragging=true;
         const rect=btn.getBoundingClientRect();
@@ -1188,6 +1239,8 @@ function renderUserTabs(){
         ghost.textContent=btn.textContent;
         document.body.appendChild(ghost);
         moveGhost(e.clientX,e.clientY);
+        insertIdx=getInsertIdx(e.clientX);
+        showDropIndicator(insertIdx);
         document.body.style.cursor='grabbing';
       },300);
     });
@@ -1205,22 +1258,17 @@ function renderUserTabs(){
   // マウスムーブ・アップはdocumentで捕捉
   const onMouseMove=e=>{
     if(!isDragging)return;
-    if(!ghost&&dragSrcId){return;}
     moveGhost(e.clientX,e.clientY);
-    tabs.querySelectorAll('.drag-over').forEach(el=>el.classList.remove('drag-over'));
-    const tgtId=getTargetUid(e.clientX,e.clientY);
-    if(tgtId&&tgtId!==dragSrcId){
-      const tgtBtn=tabs.querySelector(`[data-uid="${tgtId}"]`);
-      if(tgtBtn)tgtBtn.classList.add('drag-over');
-    }
+    insertIdx=getInsertIdx(e.clientX);
+    showDropIndicator(insertIdx);
   };
   const onMouseUp=e=>{
     clearTimeout(longPressTimer);longPressTimer=null;
     document.body.style.cursor='';
     document.removeEventListener('mousemove',onMouseMove);
     document.removeEventListener('mouseup',onMouseUp);
-    if(!isDragging){isDragging=false;dragSrcId=null;return;}
-    endDrag(e.clientX,e.clientY);
+    if(!isDragging){isDragging=false;dragSrcIdx=null;return;}
+    endDrag(e.clientX);
   };
   document.addEventListener('mousemove',onMouseMove);
   document.addEventListener('mouseup',onMouseUp);
@@ -1881,15 +1929,87 @@ function saveDefaultTaxRate(val){
 }
 
 function makeSortableChips(el,getItems,saveItems,onAfter){
-  // タッチ長押し＋ドラッグで並び替え
+  // タッチ長押し＋ドラッグで並び替え（挿入位置方式）
   let dragIdx=null,ghost=null,offX=0,offY=0,lpTimer=null,dragging=false,sx=0,sy=0;
+  let insertPos=null; // 挿入位置インデックス
+  let indicator=null; // 縦棒インジケーター
+
   function chips(){return [...el.querySelectorAll('.cat-chip')];}
   function idxOf(chip){return chips().indexOf(chip);}
-  function nearestIdx(cx,cy){
-    let best=null,bestD=Infinity;
-    chips().forEach((c,i)=>{const r=c.getBoundingClientRect();const mx=r.left+r.width/2,my=r.top+r.height/2;const d=Math.hypot(cx-mx,cy-my);if(d<bestD){bestD=d;best=i;}});
+
+  // カーソル位置から挿入インデックスを計算（0〜chips.length）
+  function getInsertPos(cx,cy){
+    const cs=chips();
+    if(cs.length===0)return 0;
+    const elRect=el.getBoundingClientRect();
+    // 各チップの行・位置を考慮して最近傍の「境界」を探す
+    // まず同じ行（cy近傍）のチップを優先
+    let best=cs.length;
+    let bestDist=Infinity;
+    // 左端境界を0として各チップの左境界・右境界をチェック
+    for(let i=0;i<cs.length;i++){
+      const r=cs[i].getBoundingClientRect();
+      const rowMid=(r.top+r.bottom)/2;
+      if(Math.abs(cy-rowMid)>r.height*0.8)continue; // 別の行はスキップ
+      // このチップの左側境界（=i番目の前に挿入）
+      const leftDist=Math.abs(cx-r.left);
+      if(leftDist<bestDist){bestDist=leftDist;best=i;}
+      // このチップの右側境界（=i+1番目の前に挿入）
+      const rightDist=Math.abs(cx-r.right);
+      if(rightDist<bestDist){bestDist=rightDist;best=i+1;}
+    }
+    // 同じ行のチップが見つからない場合はy距離も考慮
+    if(bestDist===Infinity){
+      for(let i=0;i<cs.length;i++){
+        const r=cs[i].getBoundingClientRect();
+        const d=Math.hypot(cx-r.left,cy-(r.top+r.height/2));
+        if(d<bestDist){bestDist=d;best=i;}
+        const d2=Math.hypot(cx-r.right,cy-(r.top+r.height/2));
+        if(d2<bestDist){bestDist=d2;best=i+1;}
+      }
+    }
     return best;
   }
+
+  function showIndicator(pos){
+    if(!indicator){
+      indicator=document.createElement('div');
+      indicator.className='chip-drop-indicator';
+      el.appendChild(indicator);
+    }
+    const cs=chips();
+    const elRect=el.getBoundingClientRect();
+    let x,y,h;
+    if(cs.length===0){
+      x=8;y=0;h=28;
+    }else if(pos<=0){
+      const r=cs[0].getBoundingClientRect();
+      x=r.left-elRect.left-3;y=r.top-elRect.top;h=r.height;
+    }else if(pos>=cs.length){
+      const r=cs[cs.length-1].getBoundingClientRect();
+      x=r.right-elRect.left+1;y=r.top-elRect.top;h=r.height;
+    }else{
+      const rPrev=cs[pos-1].getBoundingClientRect();
+      const rNext=cs[pos].getBoundingClientRect();
+      // 同じ行か別行か
+      if(Math.abs(rPrev.top-rNext.top)<rPrev.height*0.5){
+        // 同じ行：中間に表示
+        x=(rPrev.right+rNext.left)/2-elRect.left;
+        y=rPrev.top-elRect.top;h=rPrev.height;
+      }else{
+        // 別行：次の行の左端
+        x=rNext.left-elRect.left-3;
+        y=rNext.top-elRect.top;h=rNext.height;
+      }
+    }
+    indicator.style.left=x+'px';
+    indicator.style.top=y+'px';
+    indicator.style.height=h+'px';
+    indicator.style.display='block';
+  }
+
+  function hideIndicator(){if(indicator)indicator.style.display='none';}
+
   function startDrag(chipEl,cx,cy){
     dragging=true;dragIdx=idxOf(chipEl);
     const r=chipEl.getBoundingClientRect();offX=cx-r.left;offY=cy-r.top;
@@ -1898,6 +2018,8 @@ function makeSortableChips(el,getItems,saveItems,onAfter){
     ghost.className='cat-chip';ghost.style.cssText='position:fixed;z-index:9999;pointer-events:none;opacity:.9;box-shadow:0 4px 16px rgba(0,0,0,.2);background:var(--accent-light);border-color:var(--accent);color:var(--accent-dark);';
     ghost.textContent=chipEl.querySelector('span').textContent;
     document.body.appendChild(ghost);moveGhost(cx,cy);
+    insertPos=getInsertPos(cx,cy);
+    showIndicator(insertPos);
     if(navigator.vibrate)navigator.vibrate(40);
   }
   function moveGhost(cx,cy){if(ghost){ghost.style.left=(cx-offX)+'px';ghost.style.top=(cy-offY)+'px';}}
@@ -1905,13 +2027,17 @@ function makeSortableChips(el,getItems,saveItems,onAfter){
     if(!dragging){clearTimeout(lpTimer);lpTimer=null;dragIdx=null;return;}
     dragging=false;clearTimeout(lpTimer);lpTimer=null;
     if(ghost){ghost.remove();ghost=null;}
-    el.querySelectorAll('.chip-dragging,.chip-drag-over').forEach(c=>c.classList.remove('chip-dragging','chip-drag-over'));
-    const toIdx=nearestIdx(cx,cy);
-    if(toIdx!=null&&toIdx!==dragIdx){
-      const items=getItems();const [moved]=items.splice(dragIdx,1);items.splice(toIdx,0,moved);
+    hideIndicator();
+    el.querySelectorAll('.chip-dragging').forEach(c=>c.classList.remove('chip-dragging'));
+    const toIdx=insertPos;
+    if(toIdx!=null&&toIdx!==dragIdx&&toIdx!==dragIdx+1){
+      const items=getItems();
+      const [moved]=items.splice(dragIdx,1);
+      const adjustedTo=toIdx>dragIdx?toIdx-1:toIdx;
+      items.splice(adjustedTo,0,moved);
       saveItems(items);onAfter();
     }
-    dragIdx=null;
+    dragIdx=null;insertPos=null;
   }
   el.addEventListener('touchstart',e=>{
     const chip=e.target.closest('.cat-chip');if(!chip||e.target.classList.contains('cat-chip-del'))return;
@@ -1923,11 +2049,11 @@ function makeSortableChips(el,getItems,saveItems,onAfter){
     if(!dragging&&(Math.abs(cx-sx)>6||Math.abs(cy-sy)>6)){clearTimeout(lpTimer);lpTimer=null;return;}
     if(!dragging)return;
     e.preventDefault();moveGhost(cx,cy);
-    el.querySelectorAll('.chip-drag-over').forEach(c=>c.classList.remove('chip-drag-over'));
-    const ti=nearestIdx(cx,cy);if(ti!=null&&ti!==dragIdx){chips()[ti]?.classList.add('chip-drag-over');}
+    insertPos=getInsertPos(cx,cy);
+    showIndicator(insertPos);
   },{passive:false});
   el.addEventListener('touchend',e=>{const t=e.changedTouches[0];endDrag(t.clientX,t.clientY);},{passive:true});
-  el.addEventListener('touchcancel',()=>{clearTimeout(lpTimer);lpTimer=null;dragging=false;dragIdx=null;if(ghost){ghost.remove();ghost=null;}el.querySelectorAll('.chip-dragging,.chip-drag-over').forEach(c=>c.classList.remove('chip-dragging','chip-drag-over'));},{passive:true});
+  el.addEventListener('touchcancel',()=>{clearTimeout(lpTimer);lpTimer=null;dragging=false;dragIdx=null;insertPos=null;if(ghost){ghost.remove();ghost=null;}hideIndicator();el.querySelectorAll('.chip-dragging').forEach(c=>c.classList.remove('chip-dragging'));},{passive:true});
   // マウス操作
   el.addEventListener('mousedown',e=>{
     const chip=e.target.closest('.cat-chip');if(!chip||e.target.classList.contains('cat-chip-del'))return;
@@ -1936,8 +2062,8 @@ function makeSortableChips(el,getItems,saveItems,onAfter){
   });
   document.addEventListener('mousemove',e=>{
     if(!dragging)return;moveGhost(e.clientX,e.clientY);
-    el.querySelectorAll('.chip-drag-over').forEach(c=>c.classList.remove('chip-drag-over'));
-    const ti=nearestIdx(e.clientX,e.clientY);if(ti!=null&&ti!==dragIdx){chips()[ti]?.classList.add('chip-drag-over');}
+    insertPos=getInsertPos(e.clientX,e.clientY);
+    showIndicator(insertPos);
   });
   document.addEventListener('mouseup',e=>{if(dragIdx!=null)endDrag(e.clientX,e.clientY);clearTimeout(lpTimer);lpTimer=null;});
 }
