@@ -109,8 +109,34 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
 .cat-pick-btn.selected{border-color:var(--accent);background:var(--accent-light);color:var(--accent-dark);}
 .income-cat .cat-pick-btn.selected{border-color:var(--income-color);background:var(--income-light);color:var(--income-color);}
 .expense-cat .cat-pick-btn.selected{border-color:var(--expense-color);background:var(--expense-light);color:var(--accent-dark);}
-.form-row{display:flex;gap:8px;margin-bottom:10px;}
-.form-row > div{flex:1;min-width:0;}
+.form-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+  flex-wrap: wrap; /* スマホで入り切らない場合に折り返す */
+}
+
+/* 1番目の要素（日付欄が入っているdiv）の設定 */
+.form-row > div:first-child {
+  flex: 0 0 140px; /* 幅を140pxで固定し、勝手に広がらないようにする */
+}
+
+/* 2番目の要素（摘要欄が入っているdiv）の設定 */
+.form-row > div:nth-child(2) {
+  flex: 1; /* 残りの幅をすべて使う */
+  min-width: 180px;
+}
+
+/* スマホ用の最終手段：400px以下なら横並びをやめて縦に積む */
+@media (max-width: 400px) {
+  .form-row {
+    flex-direction: column;
+  }
+  .form-row > div:first-child {
+    flex: 0 0 auto;
+    width: 100%;
+  }
+}
 .form-input{width:100%;height:42px;border:1.5px solid var(--border2);border-radius:10px;padding:0 12px;font-family:'Noto Sans JP',sans-serif;font-size:13px;color:var(--text);background:var(--bg);outline:none;transition:border-color .2s;box-sizing:border-box;}
 .form-input:focus{border-color:var(--accent);background:white;}
 .form-input::placeholder{color:var(--text3);}
