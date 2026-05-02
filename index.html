@@ -476,7 +476,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
     </div>
     <div class="amount-row">
       <span class="amount-prefix">¥</span>
-      <input class="amount-input" id="entry-amount" type="text" placeholder="例：600 または +200+400" inputmode="text" autocomplete="off">
+      <input class="amount-input" id="entry-amount" type="text" placeholder="例：600 または 300*2+100" inputmode="decimal" autocomplete="off">
       <button class="submit-btn" id="entry-submit-btn" onclick="submitEntry()" style="width:68px;min-width:52px;height:50px;font-size:14px;margin-top:0;flex-shrink:0;border-radius:12px;white-space:nowrap;">登録</button>
     </div>
     <div class="tax-row" id="entry-tax-row">
@@ -743,7 +743,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
       <div class="sheet-label">金額</div>
       <div class="amount-row" style="margin-bottom:12px;">
         <span class="amount-prefix">¥</span>
-        <input class="amount-input" id="edit-amount" type="text" placeholder="例：600 または +200+400" inputmode="text" autocomplete="off">
+        <input class="amount-input" id="edit-amount" type="text" placeholder="例：600 または 300*2+100" inputmode="decimal" autocomplete="off">
       </div>
       <div class="sheet-label">カテゴリ</div>
       <div class="cat-picker" id="edit-cat-picker" style="margin-bottom:8px;"></div>
@@ -3000,15 +3000,19 @@ ensureDefaultGroup();
 // 金額欄：式計算ユーティリティ（例: +200+400 → 600）
 // ════════════════════════════════════════
 function evalAmountExpr(raw){
-  // 空文字・数値のみはそのまま返す
-  const s=raw.trim();
+  const s=raw.trim()
+    // 全角数字・演算子・小数点を半角に正規化
+    .replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0))
+    .replace(/[＋]/g,'+').replace(/[－−]/g,'-')
+    .replace(/[×＊]/g,'*').replace(/[÷／]/g,'/');
   if(s===''||s==='-')return NaN;
   // 数値のみ（小数含む）
   if(/^\d+(\.\d+)?$/.test(s))return parseFloat(s);
-  // +/-演算子を含む式のみ許可（XSS対策: 数字・演算子・ドット以外は弾く）
-  if(!/^[0-9+\-.\s]+$/.test(s))return NaN;
+  // 四則演算子を含む式のみ許可（XSS対策: 数字・演算子・ドット・空白以外は弾く）
+  if(!/^[0-9+\-*/.\s]+$/.test(s))return NaN;
+  // ゼロ除算ガード: /0 のパターンを確認
+  if(/\/\s*0(\D|$)/.test(s))return NaN;
   try{
-    // 先頭の + は JavaScript の eval でそのまま動く; 念のためトリム
     const result=Function('"use strict";return('+s+')')();
     if(typeof result!=='number'||!isFinite(result)||result<0)return NaN;
     return Math.round(result);
@@ -3028,8 +3032,8 @@ function resolveAmountInput(el){
 function showAmountCalcHint(el,hintId){
   let hint=document.getElementById(hintId);
   const raw=el.value.trim();
-  // 演算子がある場合のみヒント表示
-  const hasOp=/[+\-]/.test(raw.replace(/^-/,''));
+  // 演算子がある場合のみヒント表示（四則すべて）
+  const hasOp=/[+\-*/]/.test(raw.replace(/^-/,''));
   if(!hasOp){if(hint)hint.style.display='none';return;}
   const val=evalAmountExpr(raw);
   if(!hint){
@@ -3049,6 +3053,15 @@ function showAmountCalcHint(el,hintId){
 
 // entry-amount
 document.getElementById('entry-amount').addEventListener('input',function(){
+  // 全角文字をリアルタイムで半角に変換
+  const pos=this.selectionStart;
+  const before=this.value;
+  const after=before
+    .replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0))
+    .replace(/[＋]/g,'+').replace(/[－−]/g,'-')
+    .replace(/[×＊]/g,'*').replace(/[÷／]/g,'/')
+    .replace(/[。．]/g,'.');
+  if(after!==before){this.value=after;try{this.setSelectionRange(pos,pos);}catch(e){}}
   showAmountCalcHint(this,'entry-amount-hint');
   updateTaxPreview();
 });
@@ -3061,6 +3074,14 @@ document.getElementById('entry-amount').addEventListener('blur',function(){
 
 // edit-amount
 document.getElementById('edit-amount').addEventListener('input',function(){
+  const pos=this.selectionStart;
+  const before=this.value;
+  const after=before
+    .replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0))
+    .replace(/[＋]/g,'+').replace(/[－−]/g,'-')
+    .replace(/[×＊]/g,'*').replace(/[÷／]/g,'/')
+    .replace(/[。．]/g,'.');
+  if(after!==before){this.value=after;try{this.setSelectionRange(pos,pos);}catch(e){}}
   showAmountCalcHint(this,'edit-amount-hint');
 });
 document.getElementById('edit-amount').addEventListener('blur',function(){
