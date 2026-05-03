@@ -326,9 +326,11 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
 .numpad-wrap{background:var(--surface2);border:1px solid var(--border);border-radius:14px;padding:8px;margin-top:6px;display:none;}
 .numpad-wrap.open{display:block;}
 .numpad-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;}
+/* 演算子行だけ6列に分割して1行に収める */
+.numpad-ops-row{grid-column:1/-1;display:grid;grid-template-columns:repeat(6,1fr);gap:5px;}
 .npk{height:46px;border-radius:10px;border:1.5px solid var(--border2);background:var(--surface);color:var(--text);font-family:'DM Mono',monospace;font-size:18px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;transition:background .1s,transform .08s;user-select:none;-webkit-user-select:none;}
 .npk:active{background:var(--surface2);transform:scale(.93);}
-.npk.op{font-size:19px;color:var(--blue);background:var(--blue-light);border-color:var(--blue);}
+.npk.op{font-size:17px;color:var(--blue);background:var(--blue-light);border-color:var(--blue);}
 .npk.op:active{opacity:.7;}
 .npk.del{font-size:15px;color:var(--text2);}
 .npk.zero{grid-column:span 2;}
@@ -531,12 +533,14 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
     <div id="entry-tax-both" style="display:none;font-size:11px;color:var(--text3);text-align:right;padding:2px 0;font-family:'DM Mono',monospace;"></div>
     <div class="numpad-wrap" id="entry-numpad">
       <div class="numpad-grid">
-        <button class="npk op" data-pad="entry" data-val="+">＋</button>
-        <button class="npk op" data-pad="entry" data-val="-">－</button>
-        <button class="npk op" data-pad="entry" data-val="*">×</button>
-        <button class="npk op" data-pad="entry" data-val="/">÷</button>
-        <button class="npk op" data-pad="entry" data-val="(">(</button>
-        <button class="npk op" data-pad="entry" data-val=")">)</button>
+        <div class="numpad-ops-row">
+          <button class="npk op" data-pad="entry" data-val="+">＋</button>
+          <button class="npk op" data-pad="entry" data-val="-">－</button>
+          <button class="npk op" data-pad="entry" data-val="*">×</button>
+          <button class="npk op" data-pad="entry" data-val="/">÷</button>
+          <button class="npk op" data-pad="entry" data-val="(">(</button>
+          <button class="npk op" data-pad="entry" data-val=")">)</button>
+        </div>
         <button class="npk" data-pad="entry" data-val="7">7</button>
         <button class="npk" data-pad="entry" data-val="8">8</button>
         <button class="npk" data-pad="entry" data-val="9">9</button>
@@ -820,12 +824,14 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
       <div id="edit-tax-both" style="display:none;font-size:11px;color:var(--text3);text-align:right;padding:2px 0 6px;font-family:'DM Mono',monospace;"></div>
       <div class="numpad-wrap" id="edit-numpad">
         <div class="numpad-grid">
-          <button class="npk op" data-pad="edit" data-val="+">＋</button>
-          <button class="npk op" data-pad="edit" data-val="-">－</button>
-          <button class="npk op" data-pad="edit" data-val="*">×</button>
-          <button class="npk op" data-pad="edit" data-val="/">÷</button>
-          <button class="npk op" data-pad="edit" data-val="(">(</button>
-          <button class="npk op" data-pad="edit" data-val=")">)</button>
+          <div class="numpad-ops-row">
+            <button class="npk op" data-pad="edit" data-val="+">＋</button>
+            <button class="npk op" data-pad="edit" data-val="-">－</button>
+            <button class="npk op" data-pad="edit" data-val="*">×</button>
+            <button class="npk op" data-pad="edit" data-val="/">÷</button>
+            <button class="npk op" data-pad="edit" data-val="(">(</button>
+            <button class="npk op" data-pad="edit" data-val=")">)</button>
+          </div>
           <button class="npk" data-pad="edit" data-val="7">7</button>
           <button class="npk" data-pad="edit" data-val="8">8</button>
           <button class="npk" data-pad="edit" data-val="9">9</button>
