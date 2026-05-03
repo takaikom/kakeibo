@@ -494,12 +494,10 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
     <div class="form-row">
       <div style="flex:0 0 auto;">
         <div class="form-label">日付</div>
-        <div style="position:relative;display:inline-block;">
+        <div style="display:flex;align-items:center;gap:5px;">
           <input class="date-input" id="entry-date" type="date"
-            style="position:absolute;opacity:0;width:100%;height:100%;top:0;left:0;cursor:pointer;z-index:2;"
             oninput="updateEntryDateLabel()" onchange="updateEntryDateLabel()">
-          <div id="entry-date-label" class="date-input"
-            style="cursor:pointer;min-width:120px;display:flex;align-items:center;white-space:nowrap;z-index:1;font-family:'Noto Sans JP',sans-serif;font-size:12px;"></div>
+          <span id="entry-date-dow" style="font-size:12px;color:var(--text2);font-weight:600;white-space:nowrap;"></span>
         </div>
       </div>
       <div style="flex:1;min-width:0;">
@@ -808,12 +806,10 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
       <div class="form-row" style="margin-bottom:12px;">
         <div style="flex:0 0 auto;">
           <div class="sheet-label" style="margin-bottom:5px;">日付</div>
-          <div style="position:relative;display:inline-block;">
-            <input class="date-input" id="edit-date" type="date"
-              style="position:absolute;opacity:0;width:100%;height:100%;top:0;left:0;cursor:pointer;z-index:2;"
+          <div style="display:flex;align-items:center;gap:5px;">
+            <input class="date-input" id="edit-date" type="date" style="width:auto;"
               oninput="updateEditDateLabel()" onchange="updateEditDateLabel()">
-            <div id="edit-date-label" class="date-input"
-              style="cursor:pointer;min-width:120px;display:flex;align-items:center;white-space:nowrap;z-index:1;font-family:'Noto Sans JP',sans-serif;font-size:12px;"></div>
+            <span id="edit-date-dow" style="font-size:12px;color:var(--text2);font-weight:600;white-space:nowrap;"></span>
           </div>
         </div>
         <div style="flex:1;min-width:0;">
@@ -1070,21 +1066,19 @@ function fmtDateShort(dateStr){
 function showToast(msg){const t=document.getElementById('toast');t.innerHTML=esc(msg);t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2400);}
 function updateEntryDateLabel(){
   const val=document.getElementById('entry-date').value;
-  const lbl=document.getElementById('entry-date-label');
-  if(!lbl)return;
-  if(!val){lbl.textContent='日付を選択';return;}
+  const span=document.getElementById('entry-date-dow');
+  if(!span)return;
+  if(!val){span.textContent='';return;}
   const[y,m,d]=val.split('-').map(Number);
-  const dow=DOW[new Date(y,m-1,d).getDay()];
-  lbl.textContent=`${y}/${String(m).padStart(2,'0')}/${String(d).padStart(2,'0')}（${dow}）`;
+  span.textContent='（'+DOW[new Date(y,m-1,d).getDay()]+'）';
 }
 function updateEditDateLabel(){
   const val=document.getElementById('edit-date').value;
-  const lbl=document.getElementById('edit-date-label');
-  if(!lbl)return;
-  if(!val){lbl.textContent='日付を選択';return;}
+  const span=document.getElementById('edit-date-dow');
+  if(!span)return;
+  if(!val){span.textContent='';return;}
   const[y,m,d]=val.split('-').map(Number);
-  const dow=DOW[new Date(y,m-1,d).getDay()];
-  lbl.textContent=`${y}/${String(m).padStart(2,'0')}/${String(d).padStart(2,'0')}（${dow}）`;
+  span.textContent='（'+DOW[new Date(y,m-1,d).getDay()]+'）';
 }
 function updateDateDisplay(){const d=new Date();const days=['日','月','火','水','木','金','土'];document.getElementById('date-display').textContent=`${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${days[d.getDay()]}）`;}
 
@@ -2067,26 +2061,108 @@ function saveDefaultTaxRate(val){
   updateTaxPreview();
 }
 
+// ════════════════════════════════════════
+// カテゴリ名変更（登録済みトランザクションも一括更新）
+// ════════════════════════════════════════
+function renameCategory(type, oldName, newName){
+  if(!newName || newName === oldName) return;
+  // 1) カテゴリリストを更新
+  mutateUser(u => {
+    const list = type === 'expense' ? u.expenseCats : u.incomeCats;
+    if(!list) return;
+    const idx = list.indexOf(oldName);
+    if(idx >= 0) list[idx] = newName;
+    // 税率キーも移行
+    if(u.taxRates && u.taxRates[oldName] != null){
+      u.taxRates[newName] = u.taxRates[oldName];
+      delete u.taxRates[oldName];
+    }
+    // 予算キーも移行
+    if(u.budgets && u.budgets[oldName] != null){
+      u.budgets[newName] = u.budgets[oldName];
+      delete u.budgets[oldName];
+    }
+    // 2) トランザクションのカテゴリ名を一括置換
+    (u.transactions || []).forEach(t => {
+      if(t.type === type && t.category === oldName) t.category = newName;
+    });
+  });
+  saveData();
+  renderAll();
+  renderSettings();
+  showToast(`✅ 「${oldName}」→「${newName}」に変更しました`);
+}
+
 // 選択＋上下ボタンで並び替えるリスト
 // extraColFn(item): 各行の末尾に追加するHTML文字列を返す関数（省略可）
-function makeSortableList(listEl, upBtn, downBtn, getItems, saveItems, onAfterDelete, extraColFn){
+// catType: 'expense'|'income'|null（nullのとき編集ボタン非表示）
+function makeSortableList(listEl, upBtn, downBtn, getItems, saveItems, onAfterDelete, extraColFn, catType){
   let selectedIdx = null;
+  let editingIdx  = null;
+
+  function commitEdit(row, i){
+    const inp = row.querySelector('.sort-list-item-inline-input');
+    if(!inp) return;
+    const oldName = getItems()[i];
+    const newName = inp.value.trim();
+    editingIdx = null;
+    if(!newName || newName === oldName){ render(); return; }
+    if(getItems().includes(newName)){ showToast('⚠ 同じ名前のカテゴリが既にあります'); render(); return; }
+    if(catType) renameCategory(catType, oldName, newName);
+    else render();
+  }
 
   function render(){
     const items = getItems();
     listEl.innerHTML = '';
     items.forEach((item, i) => {
       const row = document.createElement('div');
-      row.className = 'sort-list-item' + (i === selectedIdx ? ' selected' : '');
+      const isEditing = catType && (editingIdx === i);
+      row.className = 'sort-list-item' + (i === selectedIdx && !isEditing ? ' selected' : '');
       const icon = CAT_ICONS[item] || '📌';
       const extraHtml = extraColFn ? extraColFn(item) : '';
-      row.innerHTML = `<span class="sort-list-item-icon">${icon}</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;">${esc(item)}</span>${extraHtml}<button class="sort-list-item-del" data-idx="${i}">✕</button>`;
-      row.addEventListener('click', e => {
-        if(e.target.classList.contains('sort-list-item-del')) return;
-        if(e.target.closest('.sort-list-tax')) return; // 税率欄クリックは選択しない
-        selectedIdx = (selectedIdx === i) ? null : i;
-        render();
-      });
+
+      if(isEditing){
+        // インライン編集モード：テキストを入力欄に差し替え
+        const editBtnHtml = catType ? `<button class="sort-list-item-edit" title="名前を変更" style="background:none;border:none;color:var(--accent);font-size:13px;cursor:pointer;padding:2px 5px;border-radius:4px;flex-shrink:0;">✎</button>` : '';
+        row.innerHTML = `<span class="sort-list-item-icon">${icon}</span>`
+          + `<input class="sort-list-item-inline-input" value="${esc(item)}" maxlength="12" style="flex:1;min-width:0;height:26px;border:1.5px solid var(--accent);border-radius:6px;padding:0 8px;font-family:'Noto Sans JP',sans-serif;font-size:13px;outline:none;background:white;">`
+          + extraHtml
+          + editBtnHtml
+          + `<button class="sort-list-item-del" data-idx="${i}">✕</button>`;
+        const inp = row.querySelector('.sort-list-item-inline-input');
+        // 描画後フォーカス
+        requestAnimationFrame(()=>{ inp.focus(); inp.select(); });
+        inp.addEventListener('keydown', e => {
+          if(e.key === 'Enter'){ e.preventDefault(); commitEdit(row, i); }
+          if(e.key === 'Escape'){ editingIdx = null; render(); }
+        });
+        inp.addEventListener('blur', () => { setTimeout(()=>commitEdit(row, i), 120); });
+        // 編集ボタン（再クリックで確定）
+        const eb = row.querySelector('.sort-list-item-edit');
+        if(eb) eb.addEventListener('click', e => { e.stopPropagation(); commitEdit(row, i); });
+      } else {
+        // 通常表示
+        const editBtnHtml = catType ? `<button class="sort-list-item-edit" title="名前を変更" style="background:none;border:none;color:var(--text3);font-size:13px;cursor:pointer;padding:2px 5px;border-radius:4px;flex-shrink:0;">✎</button>` : '';
+        row.innerHTML = `<span class="sort-list-item-icon">${icon}</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;">${esc(item)}</span>${extraHtml}${editBtnHtml}<button class="sort-list-item-del" data-idx="${i}">✕</button>`;
+        row.addEventListener('click', e => {
+          if(e.target.classList.contains('sort-list-item-del')) return;
+          if(e.target.classList.contains('sort-list-item-edit')) return;
+          if(e.target.closest('.sort-list-tax')) return;
+          selectedIdx = (selectedIdx === i) ? null : i;
+          render();
+        });
+        const editBtn = row.querySelector('.sort-list-item-edit');
+        if(editBtn){
+          editBtn.addEventListener('click', e => {
+            e.stopPropagation();
+            selectedIdx = null;
+            editingIdx = i;
+            render();
+          });
+        }
+      }
+
       row.querySelector('.sort-list-item-del').addEventListener('click', e => {
         e.stopPropagation();
         const its = getItems();
@@ -2094,6 +2170,10 @@ function makeSortableList(listEl, upBtn, downBtn, getItems, saveItems, onAfterDe
         if(selectedIdx !== null){
           if(selectedIdx === i) selectedIdx = null;
           else if(selectedIdx > i) selectedIdx--;
+        }
+        if(editingIdx !== null){
+          if(editingIdx === i) editingIdx = null;
+          else if(editingIdx > i) editingIdx--;
         }
         saveItems(its); onAfterDelete();
       });
@@ -2111,7 +2191,7 @@ function makeSortableList(listEl, upBtn, downBtn, getItems, saveItems, onAfterDe
     selectedIdx--;
     saveItems(its);
     render();
-    renderEntryCatPicker(); // ホーム画面のカテゴリピッカーに反映
+    renderEntryCatPicker();
   });
   downBtn.addEventListener('click', () => {
     const its = getItems();
@@ -2120,11 +2200,11 @@ function makeSortableList(listEl, upBtn, downBtn, getItems, saveItems, onAfterDe
     selectedIdx++;
     saveItems(its);
     render();
-    renderEntryCatPicker(); // ホーム画面のカテゴリピッカーに反映
+    renderEntryCatPicker();
   });
 
   render();
-  return { reset(){ selectedIdx=null; render(); } };
+  return { reset(){ selectedIdx=null; editingIdx=null; render(); } };
 }
 
 function makeArrowMoveChips(el,getItems,saveItems,onAfter){
@@ -2290,6 +2370,18 @@ function makeSortableChips(el,getItems,saveItems,onAfter){
 
 function renderCatChips(type){
   const wrap = document.getElementById(type+'-cat-chips');
+  // 毎回フルリセット（編集バー重複を防ぐ）
+  wrap.className = 'sort-list-wrap';
+  wrap.innerHTML =
+    '<div class="sort-list"></div>' +
+    '<div class="sort-list-btns">' +
+      '<button class="sort-move-btn" data-dir="up" title="上へ">▲</button>' +
+      '<button class="sort-move-btn" data-dir="down" title="下へ">▼</button>' +
+    '</div>';
+  const listEl  = wrap.querySelector('.sort-list');
+  const upBtn   = wrap.querySelector('[data-dir="up"]');
+  const downBtn = wrap.querySelector('[data-dir="down"]');
+
   // 支出カテゴリのみ税率入力欄を各行に表示
   const taxColFn = type==='expense' ? (cat => {
     const {taxRates, defaultTaxRate} = getUserTaxRates();
@@ -2303,42 +2395,14 @@ function renderCatChips(type){
     </span>`;
   }) : null;
 
-  // 初回のみ外枠（リスト＋ボタン）を組み立てる
-  if(!wrap.querySelector('.sort-list')){
-    wrap.className = 'sort-list-wrap';
-    wrap.innerHTML =
-      '<div class="sort-list"></div>' +
-      '<div class="sort-list-btns">' +
-        '<button class="sort-move-btn" data-dir="up" title="上へ">▲</button>' +
-        '<button class="sort-move-btn" data-dir="down" title="下へ">▼</button>' +
-      '</div>';
-    const listEl  = wrap.querySelector('.sort-list');
-    const upBtn   = wrap.querySelector('[data-dir="up"]');
-    const downBtn = wrap.querySelector('[data-dir="down"]');
-    makeSortableList(
-      listEl, upBtn, downBtn,
-      ()=>type==='expense'?getExpenseCats():getIncomeCats(),
-      items=>mutateUser(u=>{if(type==='expense')u.expenseCats=items;else u.incomeCats=items;}),
-      ()=>{renderEntryCatPicker(); renderCatChips(type);},
-      taxColFn
-    );
-  } else {
-    // 2回目以降：リストの中身だけ再描画（▲▼ボタンにバインドされたインスタンスは維持）
-    // → makeSortableList の render() を外から呼べないので、同じ引数で再初期化する
-    const listEl  = wrap.querySelector('.sort-list');
-    const upBtn   = wrap.querySelector('[data-dir="up"]');
-    const downBtn = wrap.querySelector('[data-dir="down"]');
-    // 古いイベントリスナーをリセットするためボタンを複製して差し替え
-    const newUp = upBtn.cloneNode(true); upBtn.replaceWith(newUp);
-    const newDown = downBtn.cloneNode(true); downBtn.replaceWith(newDown);
-    makeSortableList(
-      listEl, newUp, newDown,
-      ()=>type==='expense'?getExpenseCats():getIncomeCats(),
-      items=>mutateUser(u=>{if(type==='expense')u.expenseCats=items;else u.incomeCats=items;}),
-      ()=>{renderEntryCatPicker(); renderCatChips(type);},
-      taxColFn
-    );
-  }
+  makeSortableList(
+    listEl, upBtn, downBtn,
+    ()=>type==='expense'?getExpenseCats():getIncomeCats(),
+    items=>mutateUser(u=>{if(type==='expense')u.expenseCats=items;else u.incomeCats=items;}),
+    ()=>{renderEntryCatPicker(); renderCatChips(type);},
+    taxColFn,
+    type
+  );
 }
 
 function addCat(type){
@@ -2360,36 +2424,22 @@ document.getElementById('new-income-cat').addEventListener('keydown',e=>{if(e.ke
 function renderAccountChips(type){
   const wrap = document.getElementById(type+'-account-chips');
   if(!wrap) return;
-  if(!wrap.querySelector('.sort-list')){
-    wrap.className = 'sort-list-wrap';
-    wrap.innerHTML =
-      '<div class="sort-list"></div>' +
-      '<div class="sort-list-btns">' +
-        '<button class="sort-move-btn" data-dir="up" title="上へ">▲</button>' +
-        '<button class="sort-move-btn" data-dir="down" title="下へ">▼</button>' +
-      '</div>';
-    const listEl  = wrap.querySelector('.sort-list');
-    const upBtn   = wrap.querySelector('[data-dir="up"]');
-    const downBtn = wrap.querySelector('[data-dir="down"]');
-    makeSortableList(
-      listEl, upBtn, downBtn,
-      ()=>type==='expense'?getExpenseAccounts():getIncomeAccounts(),
-      items=>mutateUser(u=>{if(type==='expense')u.expenseAccounts=items;else u.incomeAccounts=items;}),
-      ()=>{renderEntryAccountPicker(); renderAccountChips(type);}
-    );
-  } else {
-    const listEl  = wrap.querySelector('.sort-list');
-    const upBtn   = wrap.querySelector('[data-dir="up"]');
-    const downBtn = wrap.querySelector('[data-dir="down"]');
-    const newUp = upBtn.cloneNode(true); upBtn.replaceWith(newUp);
-    const newDown = downBtn.cloneNode(true); downBtn.replaceWith(newDown);
-    makeSortableList(
-      listEl, newUp, newDown,
-      ()=>type==='expense'?getExpenseAccounts():getIncomeAccounts(),
-      items=>mutateUser(u=>{if(type==='expense')u.expenseAccounts=items;else u.incomeAccounts=items;}),
-      ()=>{renderEntryAccountPicker(); renderAccountChips(type);}
-    );
-  }
+  wrap.className = 'sort-list-wrap';
+  wrap.innerHTML =
+    '<div class="sort-list"></div>' +
+    '<div class="sort-list-btns">' +
+      '<button class="sort-move-btn" data-dir="up" title="上へ">▲</button>' +
+      '<button class="sort-move-btn" data-dir="down" title="下へ">▼</button>' +
+    '</div>';
+  const listEl  = wrap.querySelector('.sort-list');
+  const upBtn   = wrap.querySelector('[data-dir="up"]');
+  const downBtn = wrap.querySelector('[data-dir="down"]');
+  makeSortableList(
+    listEl, upBtn, downBtn,
+    ()=>type==='expense'?getExpenseAccounts():getIncomeAccounts(),
+    items=>mutateUser(u=>{if(type==='expense')u.expenseAccounts=items;else u.incomeAccounts=items;}),
+    ()=>{renderEntryAccountPicker(); renderAccountChips(type);}
+  );
 }
 
 function addAccount(type){
