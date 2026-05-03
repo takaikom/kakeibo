@@ -173,6 +173,8 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
 .act-btn.del:active{background:var(--red-light);color:var(--red-mid);}
 .act-btn.edit{background:var(--amber-light);color:var(--amber);border-color:var(--amber);}
 .act-btn.edit:active{opacity:.7;}
+.act-btn.copy{background:var(--blue-light);color:var(--blue);border-color:var(--blue);font-size:11px;}
+.act-btn.copy:active{opacity:.7;}
 
 /* ── AGG ── */
 /* 親要素：左右のボタンを端に寄せる */
@@ -465,8 +467,10 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
         <button class="menu-btn" id="menu-btn">☰</button>
       </div>
     </div>
-    <div class="header-sub" id="date-display"></div>
-    <div id="gas-sync-time" style="font-size:10px;color:var(--text3);padding:0 20px 6px;display:none;"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:0 14px 6px;">
+      <div class="header-sub" id="date-display" style="padding:0;"></div>
+      <div id="gas-sync-time" style="font-size:10px;color:var(--text3);display:none;white-space:nowrap;"></div>
+    </div>
     <div class="group-tabs" id="group-tabs"></div>
     <div class="user-tabs" id="user-tabs"></div>
     <div class="main-tabs">
@@ -1033,6 +1037,45 @@ function generateTxId(dateStr){
   });
   const seq=maxSeq+1;
   return d+'-'+String(seq).padStart(2,'0');
+}
+
+// 全ユーザーの既存IDをYYYYMMDD-NN形式に正規化（移行処理）
+function migrateAllTxIds(){
+  const d=loadGroupData();
+  let changed=false;
+  d.users.forEach(u=>{
+    if(!u.transactions||!u.transactions.length)return;
+    // 日付順→同日内は元の並び順でソート
+    const sorted=[...u.transactions].sort((a,b)=>{
+      const da=a.date||'';const db=b.date||'';
+      if(da!==db)return da.localeCompare(db);
+      // 同日内は配列の元インデックス順（安定ソート）
+      return 0;
+    });
+    // 日付ごとに連番を振る
+    const dateSeq={};
+    const idMap=new Map(); // old id → new id
+    sorted.forEach(t=>{
+      const dateKey=(t.date||'').replace(/-/g,'');
+      if(!dateKey)return;
+      dateSeq[dateKey]=(dateSeq[dateKey]||0)+1;
+      const newId=dateKey+'-'+String(dateSeq[dateKey]).padStart(2,'0');
+      if(String(t.id)!==newId){
+        idMap.set(String(t.id),newId);
+        changed=true;
+      }
+    });
+    if(idMap.size>0){
+      u.transactions=u.transactions.map(t=>{
+        const newId=idMap.get(String(t.id));
+        return newId?{...t,id:newId}:t;
+      });
+    }
+  });
+  if(changed){
+    saveGroupData(d);
+  }
+  return changed;
 }
 
 // 次の枝番をプレビュー用に取得（まだ登録しない）
@@ -1989,6 +2032,7 @@ function txCard(t){
     </div>
     <div class="tx-amount ${t.type}">${sign}¥${fmtAmt(t.amount)}</div>
     <div class="card-actions">
+      <button class="act-btn copy" data-id="${t.id}" title="コピーして新規登録">📋</button>
       <button class="act-btn edit" data-id="${t.id}">✏️</button>
       <button class="act-btn del" data-id="${t.id}">✕</button>
     </div>
@@ -2014,6 +2058,7 @@ function txCardFull(t){
     </div>
     <div class="tx-amount ${t.type}">${sign}¥${fmtAmt(t.amount)}</div>
     <div class="card-actions">
+      <button class="act-btn copy" data-id="${t.id}" title="コピーして新規登録">📋</button>
       <button class="act-btn edit" data-id="${t.id}">✏️</button>
       <button class="act-btn del" data-id="${t.id}">✕</button>
     </div>
@@ -2021,6 +2066,7 @@ function txCardFull(t){
 }
 
 function bindTxButtons(el){
+  el.querySelectorAll('.act-btn.copy').forEach(b=>b.addEventListener('click',()=>copyTx(b.dataset.id)));
   el.querySelectorAll('.act-btn.edit').forEach(b=>b.addEventListener('click',()=>openEdit(b.dataset.id)));
   el.querySelectorAll('.act-btn.del').forEach(b=>b.addEventListener('click',()=>deleteTx(b.dataset.id)));
 }
@@ -2030,6 +2076,70 @@ function deleteTx(id){
   mutateUser(u=>{u.transactions=u.transactions.filter(t=>String(t.id)!==String(id));});
   saveData();renderTab(currentTab);renderHomeSummary();renderHomeBudget();
   showToast('🗑 削除しました');
+}
+
+// 取引をコピーして「収支を記録」フォームに展開（日付だけ今日）
+function copyTx(id){
+  const tx=getTransactions().find(t=>String(t.id)===String(id));
+  if(!tx)return;
+
+  // ホームタブに移動
+  switchTab('home');
+
+  // タイプ設定
+  entryType=tx.type;
+  document.getElementById('type-expense').classList.toggle('active',tx.type==='expense');
+  document.getElementById('type-income').classList.toggle('active',tx.type==='income');
+  const picker=document.getElementById('entry-cat-picker');
+  picker.className='cat-picker '+(tx.type==='expense'?'expense-cat':'income-cat');
+
+  // 日付は今日
+  document.getElementById('entry-date').value=todayISO();
+  updateEntryDateLabel();
+  updateEntryFullId();
+
+  // カテゴリ
+  const cats=tx.type==='expense'?getExpenseCats():getIncomeCats();
+  entrySelectedCat=cats.includes(tx.category)?tx.category:'__custom__';
+  renderEntryCatPicker();
+  if(entrySelectedCat==='__custom__'){
+    const customInput=document.getElementById('entry-cat-custom');
+    if(customInput)customInput.value=tx.category;
+  }
+
+  // 金額（exprがあれば式を、なければ金額を）
+  // 税抜きで登録されていた場合はtaxExclの値をexprとして使う
+  const amtVal=tx.taxExcl!=null?String(tx.taxExcl):(tx.expr||String(tx.amount));
+  document.getElementById('entry-amount').value=amtVal;
+  showAmountCalcHint(document.getElementById('entry-amount'),'entry-amount-hint');
+
+  // 税抜きトグル
+  const taxToggle=document.getElementById('entry-tax-toggle');
+  if(taxToggle){
+    taxToggle.checked=!!(tx.taxExcl!=null&&tx.type==='expense');
+  }
+
+  // 摘要・メモ
+  document.getElementById('entry-desc').value=tx.desc||'';
+  document.getElementById('entry-memo').value=tx.memo||'';
+
+  // 相手勘定科目
+  const accounts=tx.type==='expense'?getExpenseAccounts():getIncomeAccounts();
+  if(tx.account&&accounts.includes(tx.account)){
+    entrySelectedAccount=tx.account;
+  }else if(tx.account){
+    entrySelectedAccount='__custom_acc__';
+    const accCustom=document.getElementById('entry-account-custom');
+    if(accCustom)accCustom.value=tx.account;
+  }else{
+    entrySelectedAccount='';
+  }
+  renderEntryAccountPicker();
+  updateTaxPreview();
+
+  // フォームまでスクロール
+  document.querySelector('.entry-form')?.scrollIntoView({behavior:'smooth',block:'start'});
+  showToast('📋 コピーしました。日付を確認して登録してください');
 }
 
 // ════════════════════════════════════════
@@ -3474,6 +3584,7 @@ document.getElementById('wc-new-name').addEventListener('keydown',e=>{if(e.key==
 updateDateDisplay();
 setInterval(updateDateDisplay,60000);
 ensureDefaultGroup();
+// 既存IDの正規化はinit()内でグループ確定後に実行
 
 (function init(){
   const LAUNCHED_KEY='kakeibo_launched';
@@ -3496,6 +3607,8 @@ ensureDefaultGroup();
   if(gs.length>0&&!getCurrentGroupId()){
     setCurrentGroupId(gs[0].id);
   }
+  // 既存IDをYYYYMMDD-NN形式に正規化（旧形式のIDを持つデータを移行）
+  migrateAllTxIds();
   const pinned=getPinnedUserId();
   const d=loadGroupData();
 
