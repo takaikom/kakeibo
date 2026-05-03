@@ -151,7 +151,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
 /* ── TRANSACTION LIST ── */
 .tx-group{margin-bottom:8px;}
 .tx-date-header{display:flex;justify-content:space-between;align-items:center;padding:6px 2px;font-size:12px;font-weight:700;color:var(--text3);}
-.tx-date-label{font-family:'DM Mono',monospace;}
+.tx-date-label{font-family:'Noto Sans JP',sans-serif;font-weight:700;}
 .tx-date-net{font-family:'DM Mono',monospace;}
 .tx-date-net.pos{color:var(--balance-pos);}
 .tx-date-net.neg{color:var(--balance-neg);}
@@ -494,7 +494,13 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
     <div class="form-row">
       <div style="flex:0 0 auto;">
         <div class="form-label">日付</div>
-        <input class="date-input" id="entry-date" type="date">
+        <div style="position:relative;display:inline-block;">
+          <input class="date-input" id="entry-date" type="date"
+            style="position:absolute;opacity:0;width:100%;height:100%;top:0;left:0;cursor:pointer;z-index:2;"
+            oninput="updateEntryDateLabel()" onchange="updateEntryDateLabel()">
+          <div id="entry-date-label" class="date-input"
+            style="cursor:pointer;min-width:120px;display:flex;align-items:center;white-space:nowrap;z-index:1;font-family:'Noto Sans JP',sans-serif;font-size:12px;"></div>
+        </div>
       </div>
       <div style="flex:1;min-width:0;">
         <div class="form-label">摘要</div>
@@ -802,7 +808,13 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
       <div class="form-row" style="margin-bottom:12px;">
         <div style="flex:0 0 auto;">
           <div class="sheet-label" style="margin-bottom:5px;">日付</div>
-          <input class="date-input" id="edit-date" type="date" style="width:auto;">
+          <div style="position:relative;display:inline-block;">
+            <input class="date-input" id="edit-date" type="date"
+              style="position:absolute;opacity:0;width:100%;height:100%;top:0;left:0;cursor:pointer;z-index:2;"
+              oninput="updateEditDateLabel()" onchange="updateEditDateLabel()">
+            <div id="edit-date-label" class="date-input"
+              style="cursor:pointer;min-width:120px;display:flex;align-items:center;white-space:nowrap;z-index:1;font-family:'Noto Sans JP',sans-serif;font-size:12px;"></div>
+          </div>
         </div>
         <div style="flex:1;min-width:0;">
           <div class="sheet-label" style="margin-bottom:5px;">摘要</div>
@@ -1041,8 +1053,39 @@ const todayISO=()=>{const d=new Date();return`${d.getFullYear()}-${String(d.getM
 const txDate=tx=>tx.date.slice(0,10);
 const txMonth=tx=>tx.date.slice(0,7);
 const txYear=tx=>tx.date.slice(0,4);
+const DOW=['日','月','火','水','木','金','土'];
+function fmtDateLabel(dateStr){
+  // dateStr: "YYYY-MM-DD"
+  const[y,m,d]=dateStr.split('-').map(Number);
+  const dow=DOW[new Date(y,m-1,d).getDay()];
+  return`${y}/${m}/${d}（${dow}）`;
+}
+function fmtDateShort(dateStr){
+  // M/D（曜）形式
+  const[y,m,d]=dateStr.split('-').map(Number);
+  const dow=DOW[new Date(y,m-1,d).getDay()];
+  return`${m}/${d}（${dow}）`;
+}
 
 function showToast(msg){const t=document.getElementById('toast');t.innerHTML=esc(msg);t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2400);}
+function updateEntryDateLabel(){
+  const val=document.getElementById('entry-date').value;
+  const lbl=document.getElementById('entry-date-label');
+  if(!lbl)return;
+  if(!val){lbl.textContent='日付を選択';return;}
+  const[y,m,d]=val.split('-').map(Number);
+  const dow=DOW[new Date(y,m-1,d).getDay()];
+  lbl.textContent=`${y}/${String(m).padStart(2,'0')}/${String(d).padStart(2,'0')}（${dow}）`;
+}
+function updateEditDateLabel(){
+  const val=document.getElementById('edit-date').value;
+  const lbl=document.getElementById('edit-date-label');
+  if(!lbl)return;
+  if(!val){lbl.textContent='日付を選択';return;}
+  const[y,m,d]=val.split('-').map(Number);
+  const dow=DOW[new Date(y,m-1,d).getDay()];
+  lbl.textContent=`${y}/${String(m).padStart(2,'0')}/${String(d).padStart(2,'0')}（${dow}）`;
+}
 function updateDateDisplay(){const d=new Date();const days=['日','月','火','水','木','金','土'];document.getElementById('date-display').textContent=`${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${days[d.getDay()]}）`;}
 
 // ════════════════════════════════════════
@@ -1591,6 +1634,7 @@ function submitEntry(){
     renderEntryAccountPicker();
   }
   updateTaxPreview();
+  updateEntryDateLabel();
   renderHomeSummary();renderHomeBudget();renderHomeRecent();
   showToast(entryType==='expense'?'💸 支出を登録しました':'💰 収入を登録しました');
 }
@@ -1697,10 +1741,9 @@ function renderHomeRecent(){
     const dayIncome=ts.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
     const dayExpense=ts.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
     const net=dayIncome-dayExpense;
-    const[,m,day]=date.split('-');
     return`<div class="tx-group">
       <div class="tx-date-header">
-        <span class="tx-date-label">${parseInt(m)}/${parseInt(day)}</span>
+        <span class="tx-date-label">${fmtDateShort(date)}</span>
         <span class="tx-date-net ${net>=0?'pos':'neg'}">${net>=0?'+':'-'}¥${fmtAmt(Math.abs(net))}</span>
       </div>
       ${ts.map(t=>txCardFull(t)).join('')}
@@ -1839,10 +1882,9 @@ function renderList(){
     const dayIncome=ts.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
     const dayExpense=ts.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
     const net=dayIncome-dayExpense;
-    const[,m,day]=date.split('-');
     return`<div class="tx-group">
       <div class="tx-date-header">
-        <span class="tx-date-label">${parseInt(m)}/${parseInt(day)}</span>
+        <span class="tx-date-label">${fmtDateShort(date)}</span>
         <span class="tx-date-net ${net>=0?'pos':'neg'}">${net>=0?'+':'-'}¥${fmtAmt(Math.abs(net))}</span>
       </div>
       ${ts.map(t=>txCard(t)).join('')}
@@ -1963,11 +2005,10 @@ function renderLedger(){
     const mainAccLabel=mainAccTranslated
       ? `${esc(isExpense?acc:acc)} <span style="color:var(--text3);font-size:10px;font-weight:400;">（${esc(t.category)}）</span>`
       : esc(isExpense?acc:acc);
-    const[,m,day]=t.date.split('-');
     if(isExpense)totalDebit+=t.amount;else totalCredit+=t.amount;
     return`<div class="ledger-row ${isExpense?'expense-row':'income-row'}">
       <div class="ledger-cell">
-        <div class="ledger-acc">${parseInt(m)}/${parseInt(day)}　${mainAccLabel}</div>
+        <div class="ledger-acc">${fmtDateShort(t.date)}　${mainAccLabel}</div>
         <div class="ledger-acc-sub" style="padding-left:14px;">　（${esc(creditAcc)}）${t.desc?'　'+esc(t.desc):''}</div>
       </div>
       <div class="ledger-cell mono debit">${isExpense?'¥'+fmtAmt(t.amount):''}</div>
@@ -2509,6 +2550,7 @@ function openEdit(id){
   document.getElementById('edit-type-income').classList.toggle('active',tx.type==='income');
   document.getElementById('edit-amount').value=tx.amount;
   document.getElementById('edit-date').value=tx.date;
+  updateEditDateLabel();
   document.getElementById('edit-desc').value=tx.desc||'';
   document.getElementById('edit-memo').value=tx.memo||'';
   // カテゴリ: 既存リストにあればボタン選択、なければ直接入力欄にセット
@@ -3106,6 +3148,7 @@ ensureDefaultGroup();
   if(!hasLaunched){
     // 完全初回 → Step1を表示
     document.getElementById('entry-date').value=todayISO();
+    updateEntryDateLabel();
     showWelcome();renderWelcomeStep1();return;
   }
 
@@ -3121,6 +3164,7 @@ ensureDefaultGroup();
     setCurrentUserId(pinned);
     document.getElementById('entry-date').value=todayISO();
     document.getElementById('edit-date').value=todayISO();
+    updateEntryDateLabel();updateEditDateLabel();
     hideWelcome();renderAll();
     refreshGasStatus();
     if(getGroupGasUrl())syncFromRemote(true);
@@ -3130,6 +3174,7 @@ ensureDefaultGroup();
     else{renderWelcomeStep1();}
   }
   document.getElementById('entry-date').value=todayISO();
+  updateEntryDateLabel();
 })();
 
 // ════════════════════════════════════════
