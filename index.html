@@ -52,8 +52,8 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
 .user-tabs::-webkit-scrollbar{display:none;}
 .user-tab{flex-shrink:0;padding:8px 14px;font-size:13px;font-weight:500;color:var(--text3);border:none;background:transparent;cursor:grab;border-bottom:2.5px solid transparent;margin-bottom:-1px;transition:color .15s,border-color .15s;white-space:nowrap;font-family:'Noto Sans JP',sans-serif;-webkit-tap-highlight-color:transparent;user-select:none;touch-action:none;}
 .user-tab.active{color:var(--accent);border-bottom-color:var(--accent);}
-.user-tab.is-me{background:var(--accent-light);color:var(--accent-dark);}
-.user-tab.is-me.active{color:var(--accent-dark);border-bottom-color:var(--accent);}
+.user-tab.is-me{}
+.user-tab.is-me.active{border-bottom-color:var(--accent);}
 .user-tab.drag-dragging{opacity:0.35;background:var(--surface2);}
 .user-tab-ghost{position:fixed;pointer-events:none;z-index:9999;padding:8px 14px;font-size:13px;font-weight:700;color:var(--accent);background:var(--accent-light);border:1.5px solid var(--accent);border-radius:8px;white-space:nowrap;font-family:'Noto Sans JP',sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.18);opacity:.92;}
 .user-tab-drop-indicator{position:absolute;top:4px;bottom:4px;width:2.5px;background:var(--blue);border-radius:2px;pointer-events:none;z-index:10;transition:left .07s;box-shadow:0 0 0 1.5px var(--blue-light);}
@@ -471,7 +471,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between;padding:0 14px 6px;">
       <div class="header-sub" id="date-display" style="padding:0;"></div>
-      <div id="gas-sync-time" style="font-size:10px;color:var(--text3);display:none;white-space:nowrap;"></div>
+      <div id="gas-sync-time" style="font-size:10px;color:var(--text3);display:none;white-space:nowrap;flex-shrink:0;margin-left:8px;"></div>
     </div>
     <div class="group-tabs" id="group-tabs"></div>
     <div class="user-tabs" id="user-tabs"></div>
@@ -687,11 +687,13 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
     <div class="settings-card-title">🔗 GAS連携（グループ共有）</div>
     <p style="font-size:12px;color:var(--text3);margin-bottom:12px;line-height:1.7;">URLを設定すると、同じグループのメンバー全員の記録をクラウドで共有できます。</p>
     <input class="url-input" id="gas-url-input" type="url" placeholder="https://script.google.com/macros/s/...">
-    <div style="display:flex;gap:8px;">
-      <button class="blue-btn" style="flex:1;" id="gas-save-btn">URLを保存・接続</button>
-      <button class="secondary-btn" id="gas-clear-btn">解除</button>
+    <div style="display:flex;gap:6px;flex-wrap:nowrap;">
+      <button class="blue-btn" style="flex:2;min-width:0;font-size:12px;padding:0 6px;" id="gas-save-btn">URLを保存・接続</button>
+      <button class="secondary-btn" style="flex:1;min-width:0;font-size:12px;" id="gas-clear-btn">解除</button>
+      <button class="secondary-btn" style="flex:1;min-width:0;font-size:12px;white-space:nowrap;" id="gas-auto-sync-btn">自動同期 ON</button>
     </div>
     <div class="sync-status-text" id="gas-status-text">未設定（ローカル保存のみ）</div>
+
     <div style="margin-top:20px;">
       <div class="settings-card-title" style="margin-bottom:10px;">📋 GASセットアップ手順</div>
       <div class="setup-step"><div class="setup-num">1</div><div>Googleスプレッドシートを新規作成</div></div>
@@ -983,6 +985,9 @@ function mutateUser(fn){
 // GAS SYNC (手動操作のみ)
 // ════════════════════════════════════════
 const GAS_SYNC_TIME_KEY='kb_gas_sync_time';
+const GAS_AUTO_SYNC_KEY='kb_gas_auto_sync';
+function getAutoSync(){return localStorage.getItem(GAS_AUTO_SYNC_KEY)!=='0';}
+function setAutoSync(v){localStorage.setItem(GAS_AUTO_SYNC_KEY,v?'1':'0');refreshGasStatus();}
 function getGasSyncTime(){try{return JSON.parse(localStorage.getItem(GAS_SYNC_TIME_KEY)||'null');}catch{return null;}}
 function setGasSyncTime(type, dt){
   const cur=getGasSyncTime()||{};
@@ -998,7 +1003,8 @@ function renderGasSyncTime(){
   const t=getGasSyncTime();
   const upStr=t&&t.upload?'↑ '+t.upload:'↑ なし';
   const dnStr=t&&t.download?'↓ '+t.download:'↓ なし';
-  el.textContent='GAS同期: '+upStr+'  /  '+dnStr;
+  const autoStr=(getAutoSync()&&t&&t.auto)?'🔄 '+t.auto:'';
+  el.textContent='GAS: '+upStr+'  /  '+dnStr+(autoStr?'  /  '+autoStr:'');
   el.style.display='';
 }
 
@@ -1137,6 +1143,22 @@ async function syncFromRemote(silent=false){
         }
       });
       lu.transactions.sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);
+      // 設定データ（カテゴリ・予算・勘定科目・税率）はリモート側を優先してマージ
+      // ただし現在のピンユーザー自身はローカル優先（自分の設定は自分のデバイスで管理）
+      const pinnedId=getPinnedUserId();
+      if(ru.id!==pinnedId){
+        if(ru.expenseCats)lu.expenseCats=ru.expenseCats;
+        if(ru.incomeCats) lu.incomeCats =ru.incomeCats;
+        if(ru.expenseAccounts)lu.expenseAccounts=ru.expenseAccounts;
+        if(ru.incomeAccounts) lu.incomeAccounts =ru.incomeAccounts;
+        if(ru.budgets!=null)lu.budgets=ru.budgets;
+        if(ru.totalBudget!=null)lu.totalBudget=ru.totalBudget;
+        if(ru.budgetDisplayItems!=null)lu.budgetDisplayItems=ru.budgetDisplayItems;
+        if(ru.taxRates!=null)lu.taxRates=ru.taxRates;
+        if(ru.defaultTaxRate!=null)lu.defaultTaxRate=ru.defaultTaxRate;
+        if(ru.isChild!=null)lu.isChild=ru.isChild;
+        if(ru.name)lu.name=ru.name;
+      }
     }
   });
   if(remote.groupName){
@@ -1212,9 +1234,22 @@ function refreshGasStatus(){
   const el=document.getElementById('gas-url-input');
   const st=document.getElementById('gas-status-text');
   if(el)el.value=url||'';
-  if(!url){setSyncDot('off');if(st){st.textContent='未設定（ローカル保存のみ）';st.className='sync-status-text';}}
-  else{setSyncDot('ok');if(st){st.textContent='🔗 GAS連携が設定されています（このグループ）';st.className='sync-status-text ok';}}
+  if(!url){
+    setSyncDot('off');
+    if(st){st.textContent='未設定（ローカル保存のみ）';st.className='sync-status-text';}
+  }else{
+    setSyncDot('ok');
+    if(st){st.textContent='🔗 GAS連携が設定されています（このグループ）';st.className='sync-status-text ok';}
+  }
   renderGasSyncTime();
+  // 自動同期ボタンの状態を反映
+  const autoBtn=document.getElementById('gas-auto-sync-btn');
+  if(autoBtn){
+    const on=getAutoSync();
+    autoBtn.textContent='自動同期 '+(on?'ON':'OFF');
+    autoBtn.style.color=on?'var(--check)':'var(--text3)';
+    autoBtn.style.borderColor=on?'var(--check)':'var(--border2)';
+  }
 }
 
 // ════════════════════════════════════════
@@ -1315,7 +1350,7 @@ function renderGroupTabs(){
       if(g.id===getCurrentGroupId())return;
       setCurrentGroupId(g.id);
       entryType='expense';entrySelectedCat='';
-      if(g.gasUrl){setSyncDot('syncing');await syncFromRemote(true);}
+      if(g.gasUrl&&getAutoSync()){setSyncDot('syncing');await syncFromRemote(true);}else if(g.gasUrl){setSyncDot('ok');}
       else{
         setSyncDot('off');
         const pinned=getPinnedUserId();const d=loadGroupData();
@@ -3466,6 +3501,12 @@ document.getElementById('gas-clear-btn').addEventListener('click',()=>{
   setGroupGasUrl('');refreshGasStatus();renderGroupTabs();
   showToast('GAS連携を解除しました');
 });
+document.getElementById('gas-auto-sync-btn').addEventListener('click',()=>{
+  const next=!getAutoSync();
+  setAutoSync(next);
+  showToast(next?'🔄 自動同期: ON（起動時・グループ切替時に受信）':'⏸ 自動同期: OFF（手動のみ）');
+});
+
 
 // ════════════════════════════════════════
 // PARENT MODE TOGGLE
@@ -3521,7 +3562,7 @@ function renderWelcomeStep2(group){
       setCurrentUserId(item.dataset.uid);
       setPinnedUserId(item.dataset.uid);
       hideWelcome();renderAll();
-      if(group.gasUrl)syncFromRemote(true);
+      if(group.gasUrl&&getAutoSync())syncFromRemote(true);
     });
   });
 }
@@ -3626,7 +3667,7 @@ ensureDefaultGroup();
     hideWelcome();renderAll();
     updateEntryFullId();
     refreshGasStatus();
-    if(getGroupGasUrl())syncFromRemote(true);
+    if(getGroupGasUrl()&&getAutoSync()){syncFromRemote(true).then(()=>{const now=new Date().toLocaleString("ja-JP",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"});setGasSyncTime("auto",now);});};
   }else{
     showWelcome();
     if(gs.length===1){renderWelcomeStep2(gs[0]);}
