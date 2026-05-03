@@ -460,10 +460,13 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
       <div class="app-title">家計<span>簿</span></div>
       <div class="header-right">
         <div class="sync-dot" id="sync-dot" title="ローカル保存のみ"></div>
+        <button class="menu-btn" id="gas-upload-btn" title="GASへアップロード" style="font-size:16px;">↑</button>
+        <button class="menu-btn" id="gas-download-btn" title="GASからダウンロード" style="font-size:16px;">↓</button>
         <button class="menu-btn" id="menu-btn">☰</button>
       </div>
     </div>
     <div class="header-sub" id="date-display"></div>
+    <div id="gas-sync-time" style="font-size:10px;color:var(--text3);padding:0 20px 6px;display:none;"></div>
     <div class="group-tabs" id="group-tabs"></div>
     <div class="user-tabs" id="user-tabs"></div>
     <div class="main-tabs">
@@ -482,6 +485,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
   <div id="budget-section"></div>
   <div class="section-label">収支を記録</div>
   <div class="entry-form">
+    <div id="entry-full-id" style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:8px;text-align:right;"></div>
     <div class="type-toggle">
       <button class="type-btn expense active" id="type-expense" onclick="setEntryType('expense')">▼ 支出</button>
       <button class="type-btn income" id="type-income" onclick="setEntryType('income')">▲ 収入</button>
@@ -496,33 +500,39 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
         <div class="form-label">日付</div>
         <div style="display:flex;align-items:center;gap:5px;">
           <input class="date-input" id="entry-date" type="date"
-            oninput="updateEntryDateLabel()" onchange="updateEntryDateLabel()">
+            oninput="updateEntryDateLabel();updateEntryFullId();" onchange="updateEntryDateLabel();updateEntryFullId();">
           <span id="entry-date-dow" style="font-size:12px;color:var(--text2);font-weight:600;white-space:nowrap;"></span>
         </div>
       </div>
       <div style="flex:1;min-width:0;">
         <div class="form-label">摘要</div>
-        <input class="form-input" id="entry-desc" type="text" placeholder="例：スーパー" maxlength="40">
+        <input class="form-input" id="entry-desc" type="text" placeholder="例：スーパー" maxlength="40" list="entry-desc-list" autocomplete="off">
+        <datalist id="entry-desc-list"></datalist>
       </div>
     </div>
-    <div class="amount-row">
-      <span class="amount-prefix">¥</span>
-      <input class="amount-input" id="entry-amount" type="text" placeholder="例：600 または 300*2+100" inputmode="none" autocomplete="off">
-      <button class="submit-btn" id="entry-submit-btn" onclick="submitEntry()" style="width:68px;min-width:52px;height:50px;font-size:14px;margin-top:0;flex-shrink:0;border-radius:12px;white-space:nowrap;">登録</button>
+    <!-- 金額・計算結果・登録ボタンを1行に -->
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;min-width:0;">
+      <span class="amount-prefix" style="flex-shrink:0;">¥</span>
+      <input class="amount-input" id="entry-amount" type="text" placeholder="例：600 または 300*2+100" inputmode="none" autocomplete="off" style="flex:1;min-width:0;font-size:clamp(13px,4vw,20px);">
+      <span id="entry-amount-hint" style="font-size:11px;color:var(--accent-dark);font-family:'DM Mono',monospace;flex-shrink:0;white-space:nowrap;"></span>
+      <button class="submit-btn" id="entry-submit-btn" onclick="submitEntry()" style="width:60px;min-width:52px;height:50px;font-size:14px;margin-top:0;flex-shrink:0;border-radius:12px;white-space:nowrap;">登録</button>
     </div>
     <div class="tax-row" id="entry-tax-row">
       <label class="tax-checkbox-label">
         <input type="checkbox" id="entry-tax-toggle" onchange="updateTaxPreview()">
-        税抜き金額
+        税抜き金額で入力
       </label>
       <span class="tax-preview" id="entry-tax-preview"></span>
     </div>
+    <div id="entry-tax-both" style="display:none;font-size:11px;color:var(--text3);text-align:right;padding:2px 0;font-family:'DM Mono',monospace;"></div>
     <div class="numpad-wrap" id="entry-numpad">
       <div class="numpad-grid">
         <button class="npk op" data-pad="entry" data-val="+">＋</button>
         <button class="npk op" data-pad="entry" data-val="-">－</button>
         <button class="npk op" data-pad="entry" data-val="*">×</button>
         <button class="npk op" data-pad="entry" data-val="/">÷</button>
+        <button class="npk op" data-pad="entry" data-val="(">(</button>
+        <button class="npk op" data-pad="entry" data-val=")">)</button>
         <button class="npk" data-pad="entry" data-val="7">7</button>
         <button class="npk" data-pad="entry" data-val="8">8</button>
         <button class="npk" data-pad="entry" data-val="9">9</button>
@@ -703,14 +713,6 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
         </label>
       </div>
       <!-- グループ設定 -->
-      <button class="menu-item" id="menu-sync-btn">
-        <div class="menu-icon" style="background:var(--blue-light);">☁️</div>
-        <div><div>GASへ送信（アップロード）</div><div class="menu-item-desc" id="menu-sync-desc">このデバイスのデータをGASに保存</div></div>
-      </button>
-      <button class="menu-item" id="menu-sync-from-btn">
-        <div class="menu-icon" style="background:var(--green-light);">⬇️</div>
-        <div><div>GASから受信（ダウンロード）</div><div class="menu-item-desc">GASのデータをこのデバイスに取り込む</div></div>
-      </button>
       <button class="menu-item" id="menu-switch-user-btn">
         <div class="menu-icon" style="background:var(--blue-light);">🔄</div>
         <div><div>グループ／ユーザーを切り替える</div><div class="menu-item-desc">別のグループ・ユーザーとして使う</div></div>
@@ -769,21 +771,57 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
     <div class="sheet-scroll">
       <div class="sheet-handle"></div>
       <div class="sheet-title">取引を編集</div>
+      <div id="edit-full-id" style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:8px;text-align:right;"></div>
+      <!-- 1. 支出/収入 -->
       <div class="type-toggle" style="margin-bottom:14px;">
         <button class="type-btn expense" id="edit-type-expense" onclick="setEditType('expense')">▼ 支出</button>
         <button class="type-btn income" id="edit-type-income" onclick="setEditType('income')">▲ 収入</button>
       </div>
-      <div class="sheet-label">金額</div>
-      <div class="amount-row" style="margin-bottom:4px;">
-        <span class="amount-prefix">¥</span>
-        <input class="amount-input" id="edit-amount" type="text" placeholder="例：600 または 300*2+100" inputmode="none" autocomplete="off">
+      <!-- 2. カテゴリ -->
+      <div class="sheet-label">カテゴリ</div>
+      <div class="cat-picker" id="edit-cat-picker" style="margin-bottom:8px;"></div>
+      <input class="form-input" id="edit-cat-custom" type="text" placeholder="または直接入力…" maxlength="12" style="width:100%;margin-bottom:12px;" oninput="onEditCatCustomInput(this.value)">
+      <!-- 3. 日付＋摘要 -->
+      <div class="form-row" style="margin-bottom:12px;">
+        <div style="flex:0 0 auto;">
+          <div class="sheet-label" style="margin-bottom:5px;">日付</div>
+          <div style="display:flex;align-items:center;gap:5px;">
+            <input class="date-input" id="edit-date" type="date" style="width:auto;"
+              oninput="updateEditDateLabel()" onchange="updateEditDateLabel()">
+            <span id="edit-date-dow" style="font-size:12px;color:var(--text2);font-weight:600;white-space:nowrap;"></span>
+          </div>
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div class="sheet-label" style="margin-bottom:5px;">摘要</div>
+          <input class="form-input" id="edit-desc" type="text" maxlength="40" style="width:100%;" list="edit-desc-list" autocomplete="off">
+          <datalist id="edit-desc-list"></datalist>
+        </div>
       </div>
+      <!-- 4. 金額＋テンキー -->
+      <div class="sheet-label">金額</div>
+      <!-- 金額・計算結果を1行に -->
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;min-width:0;">
+        <span class="amount-prefix" style="flex-shrink:0;">¥</span>
+        <input class="amount-input" id="edit-amount" type="text" placeholder="例：600 または 300*2+100" inputmode="none" autocomplete="off" style="flex:1;min-width:0;font-size:clamp(13px,4vw,20px);">
+        <span id="edit-amount-hint" style="font-size:11px;color:var(--accent-dark);font-family:'DM Mono',monospace;flex-shrink:0;white-space:nowrap;"></span>
+      </div>
+      <!-- 税抜き入力欄 -->
+      <div class="tax-row" id="edit-tax-row" style="margin-bottom:8px;">
+        <label class="tax-checkbox-label">
+          <input type="checkbox" id="edit-tax-toggle" onchange="updateEditTaxPreview()">
+          税抜き金額で入力
+        </label>
+        <span class="tax-preview" id="edit-tax-preview"></span>
+      </div>
+      <div id="edit-tax-both" style="display:none;font-size:11px;color:var(--text3);text-align:right;padding:2px 0 6px;font-family:'DM Mono',monospace;"></div>
       <div class="numpad-wrap" id="edit-numpad">
         <div class="numpad-grid">
           <button class="npk op" data-pad="edit" data-val="+">＋</button>
           <button class="npk op" data-pad="edit" data-val="-">－</button>
           <button class="npk op" data-pad="edit" data-val="*">×</button>
           <button class="npk op" data-pad="edit" data-val="/">÷</button>
+          <button class="npk op" data-pad="edit" data-val="(">(</button>
+          <button class="npk op" data-pad="edit" data-val=")">)</button>
           <button class="npk" data-pad="edit" data-val="7">7</button>
           <button class="npk" data-pad="edit" data-val="8">8</button>
           <button class="npk" data-pad="edit" data-val="9">9</button>
@@ -800,30 +838,15 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
           <button class="npk" data-pad="edit" data-val=".">.</button>
         </div>
       </div>
-      <div class="sheet-label">カテゴリ</div>
-      <div class="cat-picker" id="edit-cat-picker" style="margin-bottom:8px;"></div>
-      <input class="form-input" id="edit-cat-custom" type="text" placeholder="または直接入力…" maxlength="12" style="width:100%;margin-bottom:12px;" oninput="onEditCatCustomInput(this.value)">
-      <div class="form-row" style="margin-bottom:12px;">
-        <div style="flex:0 0 auto;">
-          <div class="sheet-label" style="margin-bottom:5px;">日付</div>
-          <div style="display:flex;align-items:center;gap:5px;">
-            <input class="date-input" id="edit-date" type="date" style="width:auto;"
-              oninput="updateEditDateLabel()" onchange="updateEditDateLabel()">
-            <span id="edit-date-dow" style="font-size:12px;color:var(--text2);font-weight:600;white-space:nowrap;"></span>
-          </div>
-        </div>
-        <div style="flex:1;min-width:0;">
-          <div class="sheet-label" style="margin-bottom:5px;">摘要</div>
-          <input class="form-input" id="edit-desc" type="text" maxlength="40" style="width:100%;">
-        </div>
-      </div>
-      <div class="sheet-label">メモ</div>
-      <textarea class="memo-input" id="edit-memo" maxlength="100" style="margin-bottom:12px;"></textarea>
-      <div class="sheet-label">相手勘定科目（仕訳用）</div>
+      <!-- 5. 相手勘定科目 -->
+      <div class="sheet-label" id="edit-account-label" style="margin-top:4px;">相手勘定科目（仕訳用）</div>
       <div style="display:flex;gap:6px;margin-bottom:4px;">
         <div class="cat-picker" id="edit-account-picker" style="flex:1;flex-wrap:wrap;gap:6px;margin-bottom:0;"></div>
       </div>
-      <input class="form-input" id="edit-account-custom" type="text" placeholder="または直接入力（例：普通預金、現金）" maxlength="20" style="width:100%;margin-bottom:4px;" oninput="onEditAccountCustomInput(this.value)">
+      <input class="form-input" id="edit-account-custom" type="text" placeholder="または直接入力（例：普通預金、現金）" maxlength="20" style="width:100%;margin-bottom:10px;" oninput="onEditAccountCustomInput(this.value)">
+      <!-- 6. メモ -->
+      <div class="sheet-label">メモ</div>
+      <textarea class="memo-input" id="edit-memo" maxlength="100" style="margin-bottom:4px;"></textarea>
     </div>
     <div class="sheet-footer">
       <div class="sheet-actions">
@@ -947,8 +970,28 @@ function mutateUser(fn){
 }
 
 // ════════════════════════════════════════
-// GAS SYNC
+// GAS SYNC (手動操作のみ)
 // ════════════════════════════════════════
+const GAS_SYNC_TIME_KEY='kb_gas_sync_time';
+function getGasSyncTime(){try{return JSON.parse(localStorage.getItem(GAS_SYNC_TIME_KEY)||'null');}catch{return null;}}
+function setGasSyncTime(type, dt){
+  const cur=getGasSyncTime()||{};
+  cur[type]=dt;
+  localStorage.setItem(GAS_SYNC_TIME_KEY,JSON.stringify(cur));
+  renderGasSyncTime();
+}
+function renderGasSyncTime(){
+  const el=document.getElementById('gas-sync-time');
+  if(!el)return;
+  const url=getGroupGasUrl();
+  if(!url){el.style.display='none';return;}
+  const t=getGasSyncTime();
+  const upStr=t&&t.upload?'↑ '+t.upload:'↑ なし';
+  const dnStr=t&&t.download?'↓ '+t.download:'↓ なし';
+  el.textContent='GAS同期: '+upStr+'  /  '+dnStr;
+  el.style.display='';
+}
+
 function setSyncDot(state){
   const dot=document.getElementById('sync-dot');
   dot.className='sync-dot'+(state!=='off'?' '+state:'');
@@ -970,11 +1013,39 @@ async function remoteSave(data){
 async function saveData(){
   const local=loadGroupData();
   saveGroupData(local);
-  if(getGroupGasUrl()){
-    const cg=getCurrentGroup();
-    const dataToSave=cg?{...local,groupName:cg.name}:local;
-    remoteSave(dataToSave).then(ok=>{if(!ok)setSyncDot('err');}).catch(()=>setSyncDot('err'));
-  }
+  // 自動同期なし。ローカル保存のみ。
+  setSyncDot(getGroupGasUrl()?'ok':'off');
+}
+
+// ── IDシステム: YYYYMMDD-NN形式（文字列） ──
+function generateTxId(dateStr){
+  // dateStr: "YYYY-MM-DD"
+  const d=(dateStr||todayISO()).replace(/-/g,'');
+  const txs=getCurrentUser().transactions||[];
+  // 同じ日付のIDを探す（YYYYMMDD-NN形式）
+  const prefix=d+'-';
+  const sameDayTxs=txs.filter(t=>t.id&&String(t.id).startsWith(prefix));
+  let maxSeq=0;
+  sameDayTxs.forEach(t=>{
+    const parts=String(t.id).split('-');
+    const seq=parseInt(parts[1]||'0');
+    if(!isNaN(seq)&&seq>maxSeq)maxSeq=seq;
+  });
+  const seq=maxSeq+1;
+  return d+'-'+String(seq).padStart(2,'0');
+}
+
+// 次の枝番をプレビュー用に取得（まだ登録しない）
+function previewNextTxId(dateStr){
+  return generateTxId(dateStr||todayISO());
+}
+
+function fmtTxSeq(id){
+  // IDの枝番（-NN）部分だけ取得して表示用に
+  const s=String(id);
+  const m=s.match(/-(\d+)$/);
+  if(m)return m[1]; // ゼロ埋め2桁のまま返す
+  return s;
 }
 
 async function syncFromRemote(silent=false){
@@ -989,6 +1060,9 @@ async function syncFromRemote(silent=false){
   remoteDeleted.forEach(ru=>{if(!localDeleted.find(u=>u.id===ru.id))localDeleted.push(ru);});
   merged.deletedUsers=localDeleted;
 
+  // ID衝突チェック用のマップ: id -> {local: tx, remote: tx}
+  const conflictMap={};
+
   (remote.users||[]).forEach(ru=>{
     if(merged.deletedUsers.find(u=>u.id===ru.id))return;
     const lu=merged.users.find(u=>u.id===ru.id);
@@ -998,8 +1072,21 @@ async function syncFromRemote(silent=false){
       if(!ru.transactions)ru.transactions=[];
       merged.users.push(ru);
     }else{
-      const localTxIds=new Set((lu.transactions||[]).map(t=>t.id));
-      (ru.transactions||[]).forEach(rt=>{if(!localTxIds.has(rt.id))lu.transactions.push(rt);});
+      const localTxMap=new Map((lu.transactions||[]).map(t=>[t.id,t]));
+      (ru.transactions||[]).forEach(rt=>{
+        if(!localTxMap.has(rt.id)){
+          lu.transactions.push(rt);
+        } else {
+          const lt=localTxMap.get(rt.id);
+          // 内容が完全一致ならスキップ
+          if(lt.amount===rt.amount&&lt.date===rt.date&&lt.category===rt.category&&lt.desc===rt.desc){
+            // 同一内容 → 問題なし
+          } else {
+            // 同じIDだが内容が違う → 衝突
+            if(!conflictMap[rt.id])conflictMap[rt.id]={local:lt,remote:rt,user:lu};
+          }
+        }
+      });
       lu.transactions.sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);
     }
   });
@@ -1011,9 +1098,64 @@ async function syncFromRemote(silent=false){
   saveGroupData(merged);
   const pinned=getPinnedUserId();
   if(pinned&&merged.users.find(u=>u.id===pinned))setCurrentUserId(pinned);
-  if(!silent){setSyncDot('ok');showToast('✅ 同期しました');}
+
+  // ID衝突があれば確認ダイアログ
+  const conflicts=Object.values(conflictMap);
+  if(conflicts.length>0&&!silent){
+    await handleIdConflicts(conflicts);
+  }
+
+  if(!silent){setSyncDot('ok');showToast('✅ 受信しました');}
   else setSyncDot('ok');
   renderAll();
+}
+
+async function handleIdConflicts(conflicts){
+  return new Promise(resolve=>{
+    const ov=document.createElement('div');
+    ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999;display:flex;align-items:flex-end;justify-content:center;';
+    const listHtml=conflicts.map((c,i)=>`
+      <div style="background:var(--surface2);border-radius:10px;padding:10px 12px;margin-bottom:8px;font-size:12px;">
+        <div style="font-weight:700;margin-bottom:4px;">ID衝突 #${c.local.id}</div>
+        <div style="color:var(--text2);">このデバイス: ¥${fmtAmt(c.local.amount)} ${c.local.category} ${c.local.date}</div>
+        <div style="color:var(--blue);">GAS側: ¥${fmtAmt(c.remote.amount)} ${c.remote.category} ${c.remote.date}</div>
+        <div style="display:flex;gap:6px;margin-top:8px;">
+          <button data-cidx="${i}" data-action="overwrite" style="flex:1;height:36px;border-radius:8px;border:1px solid var(--accent);background:var(--accent-light);color:var(--accent-dark);font-family:inherit;font-size:12px;cursor:pointer;">上書き（GAS側を採用）</button>
+          <button data-cidx="${i}" data-action="keep" style="flex:1;height:36px;border-radius:8px;border:1px solid var(--blue);background:var(--blue-light);color:var(--blue);font-family:inherit;font-size:12px;cursor:pointer;">別IDで両方残す</button>
+        </div>
+      </div>`).join('');
+    ov.innerHTML=`<div style="background:var(--surface);border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:480px;max-height:80vh;overflow-y:auto;animation:slideUp .22s cubic-bezier(.22,1,.36,1);">
+      <div style="font-size:15px;font-weight:700;margin-bottom:12px;">⚠️ ID衝突が検出されました</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:12px;">別デバイスで同じ日に同じ連番のIDが発行されています。各衝突について対処法を選んでください。</div>
+      ${listHtml}
+      <button id="_conf-close" style="width:100%;height:40px;border-radius:10px;border:none;background:var(--surface2);color:var(--text2);font-family:inherit;font-size:14px;cursor:pointer;margin-top:4px;">完了</button>
+    </div>`;
+    document.body.appendChild(ov);
+    ov.querySelectorAll('button[data-action]').forEach(btn=>{
+      btn.addEventListener('click',()=>{
+        const cidx=parseInt(btn.dataset.cidx);
+        const c=conflicts[cidx];
+        const d=loadGroupData();
+        const u=d.users.find(u=>u.id===(c.user?c.user.id:getCurrentUserId()));
+        if(!u)return;
+        if(btn.dataset.action==='overwrite'){
+          const i=u.transactions.findIndex(t=>t.id===c.local.id);
+          if(i>=0)u.transactions[i]={...c.remote};
+        }else{
+          // 別IDを付けてリモート側を追加（日付-枝番+1で新ID生成）
+          const parts=String(c.remote.id).split('-');
+          const basePart=parts[0]||String(c.remote.id);
+          const seq=parseInt(parts[1]||'99')+10;
+          const newId=basePart+'-'+String(seq).padStart(2,'0');
+          u.transactions.push({...c.remote,id:newId});
+        }
+        saveGroupData(d);
+        btn.closest('div[style*="border-radius:10px"]').style.opacity='0.4';
+        btn.disabled=true;
+      });
+    });
+    ov.querySelector('#_conf-close').addEventListener('click',()=>{ov.remove();resolve();});
+  });
 }
 
 function refreshGasStatus(){
@@ -1023,6 +1165,7 @@ function refreshGasStatus(){
   if(el)el.value=url||'';
   if(!url){setSyncDot('off');if(st){st.textContent='未設定（ローカル保存のみ）';st.className='sync-status-text';}}
   else{setSyncDot('ok');if(st){st.textContent='🔗 GAS連携が設定されています（このグループ）';st.className='sync-status-text ok';}}
+  renderGasSyncTime();
 }
 
 // ════════════════════════════════════════
@@ -1071,6 +1214,12 @@ function updateEntryDateLabel(){
   if(!val){span.textContent='';return;}
   const[y,m,d]=val.split('-').map(Number);
   span.textContent='（'+DOW[new Date(y,m-1,d).getDay()]+'）';
+}
+function updateEntryFullId(){
+  const val=document.getElementById('entry-date').value||todayISO();
+  const nextId=previewNextTxId(val);
+  const el=document.getElementById('entry-full-id');
+  if(el)el.textContent='ID: '+nextId;
 }
 function updateEditDateLabel(){
   const val=document.getElementById('edit-date').value;
@@ -1468,6 +1617,7 @@ function renderAll(){
   renderEntryCatPicker();
   renderTab(currentTab);
   refreshGasStatus();
+  updateDescDatalist();
 }
 
 // ════════════════════════════════════════
@@ -1560,19 +1710,85 @@ function getEffectiveEntryCat(){
 function updateTaxPreview(){
   const toggle=document.getElementById('entry-tax-toggle');
   const preview=document.getElementById('entry-tax-preview');
+  const bothEl=document.getElementById('entry-tax-both');
   if(!toggle||!preview)return;
   const amtVal=document.getElementById('entry-amount')?.value;
   const amt=evalAmountExpr(amtVal||'');
-  if(toggle.checked&&amt>0){
+  if(amt>0&&entryType==='expense'){
     const cat=getEffectiveEntryCat();
     const rate=getTaxRateForCat(cat||'');
-    const taxed=Math.round(amt*(1+rate/100));
-    preview.textContent=`→ 税込 ¥${fmtAmt(taxed)}（${rate}%）`;
-    preview.className='tax-preview active';
+    if(toggle.checked){
+      // 税抜き入力 → 税込を表示
+      const taxed=Math.round(amt*(1+rate/100));
+      preview.textContent=`→ 税込 ¥${fmtAmt(taxed)}（${rate}%）`;
+      preview.className='tax-preview active';
+      if(bothEl){bothEl.textContent=`税抜 ¥${fmtAmt(amt)}  /  税込 ¥${fmtAmt(taxed)}`;bothEl.style.display='';}
+    }else{
+      preview.textContent='';
+      preview.className='tax-preview';
+      // 税込み入力 → 税抜きを表示
+      if(rate>0){
+        const excl=Math.round(amt/(1+rate/100));
+        if(bothEl){bothEl.textContent=`税込 ¥${fmtAmt(amt)}  /  税抜 ¥${fmtAmt(excl)}（${rate}%）`;bothEl.style.display='';}
+      }else{
+        if(bothEl)bothEl.style.display='none';
+      }
+    }
   }else{
     preview.textContent='';
     preview.className='tax-preview';
+    if(bothEl)bothEl.style.display='none';
   }
+}
+
+function updateEditTaxPreview(){
+  const toggle=document.getElementById('edit-tax-toggle');
+  const preview=document.getElementById('edit-tax-preview');
+  const bothEl=document.getElementById('edit-tax-both');
+  if(!toggle||!preview)return;
+  const amtVal=document.getElementById('edit-amount')?.value;
+  const amt=evalAmountExpr(amtVal||'');
+  if(amt>0&&editType==='expense'){
+    const cat=getEffectiveEditCat();
+    const rate=getTaxRateForCat(cat||'');
+    if(toggle.checked){
+      const taxed=Math.round(amt*(1+rate/100));
+      preview.textContent=`→ 税込 ¥${fmtAmt(taxed)}（${rate}%）`;
+      preview.className='tax-preview active';
+      if(bothEl){bothEl.textContent=`税抜 ¥${fmtAmt(amt)}  /  税込 ¥${fmtAmt(taxed)}`;bothEl.style.display='';}
+    }else{
+      preview.textContent='';
+      preview.className='tax-preview';
+      if(rate>0){
+        const excl=Math.round(amt/(1+rate/100));
+        if(bothEl){bothEl.textContent=`税込 ¥${fmtAmt(amt)}  /  税抜 ¥${fmtAmt(excl)}（${rate}%）`;bothEl.style.display='';}
+      }else{
+        if(bothEl)bothEl.style.display='none';
+      }
+    }
+  }else{
+    preview.textContent='';
+    preview.className='tax-preview';
+    if(bothEl)bothEl.style.display='none';
+  }
+}
+
+// 摘要プルダウン候補の更新
+function updateDescDatalist(){
+  const txs=getTransactions();
+  // descを重複なく最新順に取得
+  const seen=new Set();
+  const descs=[];
+  [...txs].sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id).forEach(t=>{
+    if(t.desc&&t.desc.trim()&&!seen.has(t.desc)){
+      seen.add(t.desc);descs.push(t.desc);
+    }
+  });
+  ['entry-desc-list','edit-desc-list'].forEach(id=>{
+    const dl=document.getElementById(id);
+    if(!dl)return;
+    dl.innerHTML=descs.map(d=>`<option value="${esc(d)}"></option>`).join('');
+  });
 }
 
 // 金額入力欄でEnterキーが押されたら登録を実行
@@ -1595,40 +1811,51 @@ renderEntryCatPicker = function() {
 
 function submitEntry(){
   const amtEl=document.getElementById('entry-amount');
-  let amount=evalAmountExpr(amtEl.value);
+  const rawExpr=amtEl.value; // 式を保存
+  let amount=evalAmountExpr(rawExpr);
   if(isNaN(amount)||amount<=0){showToast('⚠ 金額を入力してください');return;}
   const cat=getEffectiveEntryCat();
   if(!cat){showToast('⚠ カテゴリを選択または入力してください');return;}
   // 税抜きチェック
   const taxToggle=document.getElementById('entry-tax-toggle');
+  let isTaxExcl=false;
+  let taxRate=0;
+  let amountExcl=0;
   if(taxToggle&&taxToggle.checked&&entryType==='expense'){
-    const rate=getTaxRateForCat(cat);
-    amount=Math.round(amount*(1+rate/100));
+    isTaxExcl=true;
+    taxRate=getTaxRateForCat(cat);
+    amountExcl=amount;
+    amount=Math.round(amount*(1+taxRate/100));
   }
   const date=document.getElementById('entry-date').value||todayISO();
   const desc=document.getElementById('entry-desc').value.trim();
   const memo=document.getElementById('entry-memo').value.trim();
   const account=getEffectiveEntryAccount();
-  const tx={id:Date.now(),type:entryType,amount,category:cat,date,desc,memo,account};
+  const txId=generateTxId(date);
+  // 税抜き情報を保存
+  const tx={id:txId,type:entryType,amount,category:cat,date,desc,memo,account,expr:rawExpr,
+    ...(isTaxExcl?{taxExcl:amountExcl,taxRate}:{})};
   mutateUser(u=>{if(!u.transactions)u.transactions=[];u.transactions.push(tx);});
   saveData();
-  document.getElementById('entry-amount').value='';
+  // 登録後は金額欄をクリア
+  amtEl.value='';
   document.getElementById('entry-desc').value='';
   document.getElementById('entry-memo').value='';
   const customInput=document.getElementById('entry-cat-custom');
   if(customInput)customInput.value='';
   const accCustom=document.getElementById('entry-account-custom');
   if(accCustom)accCustom.value='';
-  const lastAccount = entrySelectedAccount; // 相手勘定科目を保持
+  const lastAccount = entrySelectedAccount;
   entrySelectedCat='';entrySelectedAccount='';
   renderEntryCatPicker();
-  // 登録後も直前に選択していた相手勘定科目を維持する
   if(lastAccount){
     entrySelectedAccount = lastAccount;
     renderEntryAccountPicker();
   }
   updateTaxPreview();
   updateEntryDateLabel();
+  updateEntryFullId(); // ID更新（次の番号）
+  updateDescDatalist();
   renderHomeSummary();renderHomeBudget();renderHomeRecent();
   showToast(entryType==='expense'?'💸 支出を登録しました':'💰 収入を登録しました');
 }
@@ -1752,7 +1979,9 @@ function renderHomeRecent(){
 function txCard(t){
   const icon=CAT_ICONS[t.category]||'💴';
   const sign=t.type==='income'?'+':'-';
+  const seq=fmtTxSeq(t.id);
   return`<div class="tx-card">
+    <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);flex-shrink:0;min-width:22px;text-align:center;line-height:1.2;">#${seq}</div>
     <div class="tx-icon ${t.type}">${icon}</div>
     <div class="tx-info">
       <div class="tx-cat ${t.type}">${esc(t.category)}</div>
@@ -1770,12 +1999,14 @@ function txCard(t){
 function txCardFull(t){
   const icon=CAT_ICONS[t.category]||'💴';
   const sign=t.type==='income'?'+':'-';
+  const seq=fmtTxSeq(t.id);
   const sub=[];
   if(t.account) sub.push(t.account);
   if(t.desc)    sub.push(esc(t.desc));
   if(t.memo)    sub.push('📝 '+esc(t.memo));
   const subText=sub.length?sub.join(' · '):'<span style="color:var(--border2)">摘要なし</span>';
   return`<div class="tx-card">
+    <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);flex-shrink:0;min-width:22px;text-align:center;line-height:1.2;">#${seq}</div>
     <div class="tx-icon ${t.type}">${icon}</div>
     <div class="tx-info">
       <div class="tx-cat ${t.type}">${esc(t.category)}</div>
@@ -1790,13 +2021,13 @@ function txCardFull(t){
 }
 
 function bindTxButtons(el){
-  el.querySelectorAll('.act-btn.edit').forEach(b=>b.addEventListener('click',()=>openEdit(Number(b.dataset.id))));
-  el.querySelectorAll('.act-btn.del').forEach(b=>b.addEventListener('click',()=>deleteTx(Number(b.dataset.id))));
+  el.querySelectorAll('.act-btn.edit').forEach(b=>b.addEventListener('click',()=>openEdit(b.dataset.id)));
+  el.querySelectorAll('.act-btn.del').forEach(b=>b.addEventListener('click',()=>deleteTx(b.dataset.id)));
 }
 
 function deleteTx(id){
   if(!confirm('この取引を削除しますか？'))return;
-  mutateUser(u=>{u.transactions=u.transactions.filter(t=>t.id!==id);});
+  mutateUser(u=>{u.transactions=u.transactions.filter(t=>String(t.id)!==String(id));});
   saveData();renderTab(currentTab);renderHomeSummary();renderHomeBudget();
   showToast('🗑 削除しました');
 }
@@ -2594,15 +2825,47 @@ let editingId=null;
 let editType='expense';
 
 function openEdit(id){
-  const tx=getTransactions().find(t=>t.id===id);if(!tx)return;
+  const tx=getTransactions().find(t=>String(t.id)===String(id));if(!tx)return;
   editingId=id;editType=tx.type;
+  // フルIDを編集シートに表示
+  const editIdEl=document.getElementById('edit-full-id');
+  if(editIdEl)editIdEl.textContent='ID: '+String(tx.id);
   document.getElementById('edit-type-expense').classList.toggle('active',tx.type==='expense');
   document.getElementById('edit-type-income').classList.toggle('active',tx.type==='income');
-  document.getElementById('edit-amount').value=tx.amount;
+  // 式があれば式を、なければ金額をそのまま表示（入力値を保持）
+  document.getElementById('edit-amount').value=tx.expr||tx.amount;
   document.getElementById('edit-date').value=tx.date;
   updateEditDateLabel();
   document.getElementById('edit-desc').value=tx.desc||'';
   document.getElementById('edit-memo').value=tx.memo||'';
+  // 税抜き情報の復元
+  const taxToggle=document.getElementById('edit-tax-toggle');
+  const taxRow=document.getElementById('edit-tax-row');
+  if(taxRow)taxRow.style.display=editType==='expense'?'':'none';
+  if(taxToggle){
+    // 保存された税抜き入力の場合はトグルをONにし、tax-bothに情報表示
+    if(tx.taxExcl&&tx.taxRate!=null&&editType==='expense'){
+      taxToggle.checked=true;
+      // 金額欄を税抜き金額に戻す（exprがあればexpr、なければtaxExcl）
+      document.getElementById('edit-amount').value=tx.expr||String(tx.taxExcl);
+      // tax-bothに税込表示
+      const bothEl=document.getElementById('edit-tax-both');
+      if(bothEl){
+        bothEl.textContent=`税抜 ¥${fmtAmt(tx.taxExcl)}  /  税込 ¥${fmtAmt(tx.amount)}（${tx.taxRate}%）`;
+        bothEl.style.display='';
+      }
+      const preview=document.getElementById('edit-tax-preview');
+      if(preview){
+        preview.textContent=`→ 税込 ¥${fmtAmt(tx.amount)}（${tx.taxRate}%）`;
+        preview.className='tax-preview active';
+      }
+    }else{
+      taxToggle.checked=false;
+      updateEditTaxPreview();
+    }
+  }
+  // 摘要datalist更新
+  updateDescDatalist();
   // カテゴリ: 既存リストにあればボタン選択、なければ直接入力欄にセット
   const cats=editType==='expense'?getExpenseCats():getIncomeCats();
   const customInput=document.getElementById('edit-cat-custom');
@@ -2639,8 +2902,13 @@ function setEditType(type){
   editType=type;
   document.getElementById('edit-type-expense').classList.toggle('active',type==='expense');
   document.getElementById('edit-type-income').classList.toggle('active',type==='income');
+  const taxRow=document.getElementById('edit-tax-row');
+  if(taxRow)taxRow.style.display=type==='expense'?'':'none';
+  const taxBoth=document.getElementById('edit-tax-both');
+  if(taxBoth)taxBoth.style.display='none';
   renderEditCatPicker('');
   renderEditAccountPicker('');
+  updateEditTaxPreview();
 }
 function renderEditCatPicker(selected){
   const cats=editType==='expense'?getExpenseCats():getIncomeCats();
@@ -2696,17 +2964,34 @@ function getEffectiveEditAccount(){
 function closeEditSheet(){document.getElementById('edit-sheet').classList.remove('open');}
 document.getElementById('edit-sheet').addEventListener('click',e=>{if(e.target.id==='edit-sheet')closeEditSheet();});
 function saveEdit(){
-  const amount=evalAmountExpr(document.getElementById('edit-amount').value);
+  const amtEl=document.getElementById('edit-amount');
+  const rawExpr=amtEl.value;
+  let amount=evalAmountExpr(rawExpr);
   if(isNaN(amount)||amount<=0){showToast('⚠ 金額を入力してください');return;}
   const cat=getEffectiveEditCat();
   if(!cat){showToast('⚠ カテゴリを選択または入力してください');return;}
+  // 税抜きチェック
+  const taxToggle=document.getElementById('edit-tax-toggle');
+  let isTaxExcl=false;let taxRate=0;let amountExcl=0;
+  if(taxToggle&&taxToggle.checked&&editType==='expense'){
+    isTaxExcl=true;
+    taxRate=getTaxRateForCat(cat);
+    amountExcl=amount;
+    amount=Math.round(amount*(1+taxRate/100));
+  }
   const date=document.getElementById('edit-date').value;
   const desc=document.getElementById('edit-desc').value.trim();
   const memo=document.getElementById('edit-memo').value.trim();
   const account=getEffectiveEditAccount();
+  const taxFields=isTaxExcl?{taxExcl:amountExcl,taxRate}:{taxExcl:undefined,taxRate:undefined};
   mutateUser(u=>{
-    const i=u.transactions.findIndex(t=>t.id===editingId);
-    if(i>=0)u.transactions[i]={...u.transactions[i],type:editType,amount,category:cat,date,desc,memo,account};
+    const i=u.transactions.findIndex(t=>String(t.id)===String(editingId));
+    if(i>=0){
+      const base={...u.transactions[i],type:editType,amount,category:cat,date,desc,memo,account,expr:rawExpr};
+      if(isTaxExcl){base.taxExcl=amountExcl;base.taxRate=taxRate;}
+      else{delete base.taxExcl;delete base.taxRate;}
+      u.transactions[i]=base;
+    }
   });
   saveData();closeEditSheet();
   renderTab(currentTab);renderHomeSummary();renderHomeBudget();
@@ -2806,21 +3091,25 @@ function closeMenu(){document.getElementById('menu-sheet').classList.remove('ope
 document.getElementById('menu-sheet').addEventListener('click',e=>{if(e.target.id==='menu-sheet')closeMenu();});
 document.getElementById('menu-close-btn').addEventListener('click',closeMenu);
 
-// GASへ送信（アップロード）
-document.getElementById('menu-sync-btn').addEventListener('click',async()=>{
-  closeMenu();
-  if(!getGroupGasUrl()){showToast('⚠ GAS URLが設定されていません');return;}
+// ヘッダー GAS↑（アップロード）
+document.getElementById('gas-upload-btn').addEventListener('click',async()=>{
+  if(!getGroupGasUrl()){showToast('⚠ GAS URLが設定されていません（設定タブで入力）');return;}
   setSyncDot('syncing');
   const local=loadGroupData();const cg=getCurrentGroup();
   const ok=await remoteSave(cg?{...local,groupName:cg.name}:local);
-  if(ok)showToast('☁️ GASへ送信しました');else showToast('⚠ 送信に失敗しました');
+  if(ok){
+    const now=new Date().toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+    setGasSyncTime('upload',now);
+    showToast('☁️ GASへ送信しました');
+  }else showToast('⚠ 送信に失敗しました');
 });
 
-// GASから受信（ダウンロード）
-document.getElementById('menu-sync-from-btn').addEventListener('click',async()=>{
-  closeMenu();
-  if(!getGroupGasUrl()){showToast('⚠ GAS URLが設定されていません');return;}
+// ヘッダー GAS↓（ダウンロード）
+document.getElementById('gas-download-btn').addEventListener('click',async()=>{
+  if(!getGroupGasUrl()){showToast('⚠ GAS URLが設定されていません（設定タブで入力）');return;}
   await syncFromRemote(false);
+  const now=new Date().toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+  setGasSyncTime('download',now);
 });
 
 // ユーザー切り替え
@@ -3216,6 +3505,7 @@ ensureDefaultGroup();
     document.getElementById('edit-date').value=todayISO();
     updateEntryDateLabel();updateEditDateLabel();
     hideWelcome();renderAll();
+    updateEntryFullId();
     refreshGasStatus();
     if(getGroupGasUrl())syncFromRemote(true);
   }else{
@@ -3225,6 +3515,7 @@ ensureDefaultGroup();
   }
   document.getElementById('entry-date').value=todayISO();
   updateEntryDateLabel();
+  updateEntryFullId();
 })();
 
 // ════════════════════════════════════════
@@ -3235,13 +3526,14 @@ function evalAmountExpr(raw){
     // 全角数字・演算子・小数点を半角に正規化
     .replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0))
     .replace(/[＋]/g,'+').replace(/[－−]/g,'-')
-    .replace(/[×＊]/g,'*').replace(/[÷／]/g,'/');
+    .replace(/[×＊]/g,'*').replace(/[÷／]/g,'/')
+    .replace(/[（]/g,'(').replace(/[）]/g,')');
   if(s===''||s==='-')return NaN;
   // 数値のみ（小数含む）
   if(/^\d+(\.\d+)?$/.test(s))return parseFloat(s);
-  // 四則演算子を含む式のみ許可（XSS対策: 数字・演算子・ドット・空白以外は弾く）
-  if(!/^[0-9+\-*/.\s]+$/.test(s))return NaN;
-  // ゼロ除算ガード: /0 のパターンを確認
+  // 四則演算子・括弧を含む式のみ許可（XSS対策）
+  if(!/^[0-9+\-*/().\s]+$/.test(s))return NaN;
+  // ゼロ除算ガード
   if(/\/\s*0(\D|$)/.test(s))return NaN;
   try{
     const result=Function('"use strict";return('+s+')')();
@@ -3261,24 +3553,17 @@ function resolveAmountInput(el){
 
 // リアルタイムプレビューラベルの更新
 function showAmountCalcHint(el,hintId){
-  let hint=document.getElementById(hintId);
+  const hint=document.getElementById(hintId);
+  if(!hint)return;
   const raw=el.value.trim();
-  // 演算子がある場合のみヒント表示（四則すべて）
-  const hasOp=/[+\-*/]/.test(raw.replace(/^-/,''));
-  if(!hasOp){if(hint)hint.style.display='none';return;}
+  // 演算子がある場合のみヒント表示
+  const hasOp=/[+\-*/()]/.test(raw.replace(/^-/,''));
+  if(!hasOp){hint.textContent='';return;}
   const val=evalAmountExpr(raw);
-  if(!hint){
-    hint=document.createElement('div');
-    hint.id=hintId;
-    hint.style.cssText='font-size:11px;color:var(--accent-dark);margin-top:3px;text-align:right;font-family:"DM Mono",monospace;min-height:14px;transition:opacity .15s;';
-    el.parentNode.insertAdjacentElement('afterend',hint);
-  }
   if(!isNaN(val)&&val>0){
     hint.textContent='= ¥'+val.toLocaleString();
-    hint.style.display='block';
   }else{
-    hint.textContent='⚠ 式が無効です';
-    hint.style.display='block';
+    hint.textContent='⚠';
   }
 }
 
@@ -3311,7 +3596,7 @@ function showAmountCalcHint(el,hintId){
       if(el.id==='entry-amount') updateTaxPreview();
     }
     entryEl.addEventListener('input', function(){ onPcInput(this,'entry-amount-hint'); });
-    editEl.addEventListener('input',  function(){ onPcInput(this,'edit-amount-hint'); });
+    editEl.addEventListener('input',  function(){ onPcInput(this,'edit-amount-hint'); updateEditTaxPreview(); });
     return; // テンキー関連の処理はここで終了
   }
 
@@ -3334,10 +3619,12 @@ function showAmountCalcHint(el,hintId){
 
     if(val==='enter'){
       padEl.classList.remove('open');
-      resolveAmountInput(el);
+      // 式は残す（resolveAmountInputはコメントアウト）
+      // resolveAmountInput(el);
       const hint=document.getElementById(hintId);
-      if(hint)hint.style.display='none';
+      
       if(pad==='entry'){updateTaxPreview();submitEntry();}
+      if(pad==='edit'){updateEditTaxPreview();}
       return;
     }
     if(val==='del'){
@@ -3354,6 +3641,7 @@ function showAmountCalcHint(el,hintId){
     }
     showAmountCalcHint(el,hintId);
     if(pad==='entry')updateTaxPreview();
+    if(pad==='edit')updateEditTaxPreview();
   });
 
   // テンキー外タップで閉じる
@@ -3364,28 +3652,30 @@ function showAmountCalcHint(el,hintId){
       const pad=document.getElementById(padId);
       if(!pad||!pad.classList.contains('open'))return;
       if(pad.contains(e.target)||e.target===el)return;
-      resolveAmountInput(el);
+      // 式は残す
+      // resolveAmountInput(el);
       pad.classList.remove('open');
       const hint=document.getElementById(hintId);
-      if(hint)hint.style.display='none';
+      
       if(inputId==='entry-amount')updateTaxPreview();
     });
   });
 })();
 
-// entry-amount blur（フォーカスが外れたら式を解決）
+// entry-amount blur（フォーカスが外れてもexprを残す・ヒントのみ消す）
 document.getElementById('entry-amount').addEventListener('blur',function(){
-  resolveAmountInput(this);
+  // 式は残す。ヒント表示のみ非表示にする。
   const hint=document.getElementById('entry-amount-hint');
-  if(hint)hint.style.display='none';
+  
   updateTaxPreview();
 });
 
 // edit-amount blur
 document.getElementById('edit-amount').addEventListener('blur',function(){
-  resolveAmountInput(this);
+  // 式は残す。ヒント表示のみ非表示にする。
   const hint=document.getElementById('edit-amount-hint');
-  if(hint)hint.style.display='none';
+  
+  updateEditTaxPreview();
 });
 
 // バックグラウンド復帰対応
