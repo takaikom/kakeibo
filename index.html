@@ -486,10 +486,32 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
       <button class="type-btn expense active" id="type-expense" onclick="setEntryType('expense')">▼ 支出</button>
       <button class="type-btn income" id="type-income" onclick="setEntryType('income')">▲ 収入</button>
     </div>
+    <div class="form-label">カテゴリ</div>
+    <div class="cat-picker expense-cat" id="entry-cat-picker"></div>
+    <div style="margin-bottom:10px;">
+      <input class="form-input" id="entry-cat-custom" type="text" placeholder="または直接入力…" maxlength="12" style="width:100%;" oninput="onEntryCatCustomInput(this.value)">
+    </div>
+    <div class="form-row">
+      <div style="flex:0 0 auto;">
+        <div class="form-label">日付</div>
+        <input class="date-input" id="entry-date" type="date">
+      </div>
+      <div style="flex:1;min-width:0;">
+        <div class="form-label">摘要</div>
+        <input class="form-input" id="entry-desc" type="text" placeholder="例：スーパー" maxlength="40">
+      </div>
+    </div>
     <div class="amount-row">
       <span class="amount-prefix">¥</span>
       <input class="amount-input" id="entry-amount" type="text" placeholder="例：600 または 300*2+100" inputmode="none" autocomplete="off">
       <button class="submit-btn" id="entry-submit-btn" onclick="submitEntry()" style="width:68px;min-width:52px;height:50px;font-size:14px;margin-top:0;flex-shrink:0;border-radius:12px;white-space:nowrap;">登録</button>
+    </div>
+    <div class="tax-row" id="entry-tax-row">
+      <label class="tax-checkbox-label">
+        <input type="checkbox" id="entry-tax-toggle" onchange="updateTaxPreview()">
+        税抜き金額
+      </label>
+      <span class="tax-preview" id="entry-tax-preview"></span>
     </div>
     <div class="numpad-wrap" id="entry-numpad">
       <div class="numpad-grid">
@@ -513,37 +535,15 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
         <button class="npk" data-pad="entry" data-val=".">.</button>
       </div>
     </div>
-    <div class="tax-row" id="entry-tax-row">
-      <label class="tax-checkbox-label">
-        <input type="checkbox" id="entry-tax-toggle" onchange="updateTaxPreview()">
-        税抜き金額
-      </label>
-      <span class="tax-preview" id="entry-tax-preview"></span>
-    </div>
-    <div class="form-label">カテゴリ</div>
-    <div class="cat-picker expense-cat" id="entry-cat-picker"></div>
-    <div style="margin-bottom:10px;">
-      <input class="form-input" id="entry-cat-custom" type="text" placeholder="または直接入力…" maxlength="12" style="width:100%;" oninput="onEntryCatCustomInput(this.value)">
-    </div>
-    <div class="form-row">
-      <div style="flex:0 0 auto;">
-        <div class="form-label">日付</div>
-        <input class="date-input" id="entry-date" type="date">
-      </div>
-      <div style="flex:1;min-width:0;">
-        <div class="form-label">摘要</div>
-        <input class="form-input" id="entry-desc" type="text" placeholder="例：スーパー" maxlength="40">
-      </div>
-    </div>
-    <div class="form-label">メモ</div>
-    <textarea class="memo-input" id="entry-memo" placeholder="メモ（任意）" maxlength="100"></textarea>
-    <div class="form-label" id="entry-account-label" style="margin-top:10px;">相手勘定科目（仕訳用）</div>
+    <div class="form-label" id="entry-account-label" style="margin-top:4px;">相手勘定科目（仕訳用）</div>
     <div id="entry-account-row" style="display:flex;gap:6px;margin-bottom:4px;">
       <div class="cat-picker" id="entry-account-picker" style="flex:1;flex-wrap:wrap;gap:6px;margin-bottom:0;"></div>
     </div>
-    <div style="margin-bottom:4px;">
+    <div style="margin-bottom:10px;">
       <input class="form-input" id="entry-account-custom" type="text" placeholder="または直接入力（例：普通預金、現金）" maxlength="20" style="width:100%;" oninput="onEntryAccountCustomInput(this.value)">
     </div>
+    <div class="form-label">メモ</div>
+    <textarea class="memo-input" id="entry-memo" placeholder="メモ（任意）" maxlength="100"></textarea>
   </div>
   <div class="section-label">最近の取引</div>
   <div id="home-recent"></div>
@@ -599,9 +599,15 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
 
 <!-- ══ SETTINGS TAB ══ -->
 <div id="tab-settings" class="tab-body" style="display:none;">
-  <div class="section-label">支出カテゴリ</div>  <div class="settings-card">
+  <div class="section-label">支出カテゴリ</div>
+  <div class="settings-card">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;padding:8px 10px;background:var(--surface2);border-radius:8px;">
+      <span style="flex:1;font-size:13px;color:var(--text2);font-weight:600;">デフォルト税率</span>
+      <input class="tax-rate-input" id="default-tax-rate" type="number" min="0" max="100" placeholder="10" oninput="saveDefaultTaxRate(this.value)">
+      <span style="font-size:12px;color:var(--text3);">%</span>
+    </div>
     <div class="cat-chip-list" id="expense-cat-chips"></div>
-    <div class="add-row">
+    <div class="add-row" style="margin-top:10px;">
       <input class="text-input" id="new-expense-cat" placeholder="新しいカテゴリ名" maxlength="12">
       <button class="primary-btn" onclick="addCat('expense')">追加</button>
     </div>
@@ -643,17 +649,6 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
     <div class="add-row">
       <input class="text-input" id="new-income-account" placeholder="新しい勘定科目名" maxlength="16">
       <button class="primary-btn" onclick="addAccount('income')">追加</button>
-    </div>
-  </div>
-  <div class="section-label">税率設定</div>
-  <div class="settings-card" id="tax-rate-settings-card">
-    <div class="settings-card-title">カテゴリ別税率（%）</div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:10px;">金額入力時に「税抜き金額」をチェックすると、登録時に税込み金額に変換されます。カテゴリごとに税率を設定してください（未設定は10%）。</div>
-    <div id="tax-rate-list"></div>
-    <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;">
-      <span style="flex:1;font-size:13px;color:var(--text2);">デフォルト税率</span>
-      <input class="tax-rate-input" id="default-tax-rate" type="number" min="0" max="100" placeholder="10" oninput="saveDefaultTaxRate(this.value)">
-      <span style="font-size:12px;color:var(--text3);">%</span>
     </div>
   </div>
   <div class="section-label">データ管理</div>
@@ -746,7 +741,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
       <!-- データ操作 -->
       <button class="menu-item" id="menu-export-btn">
         <div class="menu-icon" style="background:var(--accent-light);">📄</div>
-        <div><div>CSVエクスポート</div><div class="menu-item-desc">現在のユーザーの取引データ</div></div>
+        <div><div>CSVエクスポート</div><div class="menu-item-desc">取引データ＋仕訳データ（2ファイル）</div></div>
       </button>
       <button class="menu-item" id="menu-backup-btn">
         <div class="menu-icon" style="background:var(--green-light);">💾</div>
@@ -1911,7 +1906,12 @@ const ACCOUNT_MAP={
   '医療':'医療費','衣服':'被服費','水道光熱':'水道光熱費','通信費':'通信費','その他':'雑費',
   '給与':'給与収入','副業':'事業収入','ボーナス':'賞与収入','利子・配当':'受取配当金','その他収入':'雑収入',
   'おやつ':'食費','文房具':'消耗品費','本・教材':'図書費','ゲーム':'娯楽費','おこづかい':'小遣い',
-  '習い事':'教育費','お年玉':'雑収入','プレゼント':'雑収入','お手伝い':'雑収入'
+  '習い事':'教育費','お年玉':'雑収入','プレゼント':'雑収入','お手伝い':'雑収入',
+  // 追加カテゴリ
+  '管理費':'管理費','光熱費':'水道光熱費','食品':'食費','雑貨':'消耗品費',
+  '交際費':'交際費','外食':'交際費','衣類':'被服費','子ども':'教育費',
+  '家賃':'地代家賃','遊び':'娯楽費','お菓子':'食費','アルコール':'食費',
+  '本':'図書費','納税':'租税公課','保険':'保険料','学習':'教育費'
 };
 function accountName(cat){return ACCOUNT_MAP[cat]||cat;}
 
@@ -1952,11 +1952,16 @@ function renderLedger(){
     const counterAcc=t.account||'現金・預金';
     const debitAcc=isExpense?acc:counterAcc;
     const creditAcc=isExpense?counterAcc:acc;
+    // 読み替えが発生した場合、元のカテゴリ名を薄く表示
+    const mainAccTranslated=(isExpense&&acc!==t.category)||(!isExpense&&acc!==t.category);
+    const mainAccLabel=mainAccTranslated
+      ? `${esc(isExpense?acc:acc)} <span style="color:var(--text3);font-size:10px;font-weight:400;">（${esc(t.category)}）</span>`
+      : esc(isExpense?acc:acc);
     const[,m,day]=t.date.split('-');
     if(isExpense)totalDebit+=t.amount;else totalCredit+=t.amount;
     return`<div class="ledger-row ${isExpense?'expense-row':'income-row'}">
       <div class="ledger-cell">
-        <div class="ledger-acc">${parseInt(m)}/${parseInt(day)}　${esc(debitAcc)}</div>
+        <div class="ledger-acc">${parseInt(m)}/${parseInt(day)}　${mainAccLabel}</div>
         <div class="ledger-acc-sub" style="padding-left:14px;">　（${esc(creditAcc)}）${t.desc?'　'+esc(t.desc):''}</div>
       </div>
       <div class="ledger-cell mono debit">${isExpense?'¥'+fmtAmt(t.amount):''}</div>
@@ -1993,25 +1998,11 @@ function renderSettings(){
   renderMemberSettings();
   renderAccountChips('expense');
   renderAccountChips('income');
-  renderTaxRateSettings();
+  // デフォルト税率欄の値だけ更新
+  const {defaultTaxRate} = getUserTaxRates();
+  const defInput = document.getElementById('default-tax-rate');
+  if(defInput) defInput.value = defaultTaxRate;
   refreshGasStatus();
-}
-
-function renderTaxRateSettings(){
-  const{taxRates,defaultTaxRate}=getUserTaxRates();
-  const cats=getExpenseCats();
-  const el=document.getElementById('tax-rate-list');
-  if(!el)return;
-  el.innerHTML=cats.map(cat=>{
-    const rate=taxRates[cat]!=null?taxRates[cat]:'';
-    return`<div class="tax-rate-row">
-      <span class="tax-rate-name">${esc(cat)}</span>
-      <input class="tax-rate-input" data-cat="${esc(cat)}" type="number" min="0" max="100" placeholder="${defaultTaxRate}" value="${rate}" onchange="saveCatTaxRate('${esc(cat)}',this.value)">
-      <span style="font-size:12px;color:var(--text3);">%</span>
-    </div>`;
-  }).join('');
-  const defInput=document.getElementById('default-tax-rate');
-  if(defInput)defInput.value=defaultTaxRate;
 }
 
 function saveCatTaxRate(cat,val){
@@ -2030,7 +2021,8 @@ function saveDefaultTaxRate(val){
 }
 
 // 選択＋上下ボタンで並び替えるリスト
-function makeSortableList(listEl, upBtn, downBtn, getItems, saveItems, onAfterDelete){
+// extraColFn(item): 各行の末尾に追加するHTML文字列を返す関数（省略可）
+function makeSortableList(listEl, upBtn, downBtn, getItems, saveItems, onAfterDelete, extraColFn){
   let selectedIdx = null;
 
   function render(){
@@ -2040,9 +2032,11 @@ function makeSortableList(listEl, upBtn, downBtn, getItems, saveItems, onAfterDe
       const row = document.createElement('div');
       row.className = 'sort-list-item' + (i === selectedIdx ? ' selected' : '');
       const icon = CAT_ICONS[item] || '📌';
-      row.innerHTML = `<span class="sort-list-item-icon">${icon}</span><span>${esc(item)}</span><button class="sort-list-item-del" data-idx="${i}">✕</button>`;
+      const extraHtml = extraColFn ? extraColFn(item) : '';
+      row.innerHTML = `<span class="sort-list-item-icon">${icon}</span><span style="flex:1;overflow:hidden;text-overflow:ellipsis;">${esc(item)}</span>${extraHtml}<button class="sort-list-item-del" data-idx="${i}">✕</button>`;
       row.addEventListener('click', e => {
         if(e.target.classList.contains('sort-list-item-del')) return;
+        if(e.target.closest('.sort-list-tax')) return; // 税率欄クリックは選択しない
         selectedIdx = (selectedIdx === i) ? null : i;
         render();
       });
@@ -2249,6 +2243,19 @@ function makeSortableChips(el,getItems,saveItems,onAfter){
 
 function renderCatChips(type){
   const wrap = document.getElementById(type+'-cat-chips');
+  // 支出カテゴリのみ税率入力欄を各行に表示
+  const taxColFn = type==='expense' ? (cat => {
+    const {taxRates, defaultTaxRate} = getUserTaxRates();
+    const rate = taxRates[cat] != null ? taxRates[cat] : '';
+    return `<span class="sort-list-tax" style="display:flex;align-items:center;gap:3px;flex-shrink:0;margin-right:4px;" onclick="event.stopPropagation()">
+      <input type="number" min="0" max="100" placeholder="${defaultTaxRate}" value="${rate}"
+        style="width:52px;height:28px;border:1.5px solid var(--border2);border-radius:8px;padding:0 6px;font-family:'DM Mono',monospace;font-size:12px;color:var(--text);background:var(--bg);outline:none;text-align:right;"
+        onchange="saveCatTaxRate('${esc(cat)}',this.value)"
+        onfocus="this.parentNode.parentNode.click && false"
+      ><span style="font-size:11px;color:var(--text3);">%</span>
+    </span>`;
+  }) : null;
+
   // 初回のみ外枠（リスト＋ボタン）を組み立てる
   if(!wrap.querySelector('.sort-list')){
     wrap.className = 'sort-list-wrap';
@@ -2265,7 +2272,8 @@ function renderCatChips(type){
       listEl, upBtn, downBtn,
       ()=>type==='expense'?getExpenseCats():getIncomeCats(),
       items=>mutateUser(u=>{if(type==='expense')u.expenseCats=items;else u.incomeCats=items;}),
-      ()=>{renderEntryCatPicker(); renderCatChips(type);}
+      ()=>{renderEntryCatPicker(); renderCatChips(type);},
+      taxColFn
     );
   } else {
     // 2回目以降：リストの中身だけ再描画（▲▼ボタンにバインドされたインスタンスは維持）
@@ -2280,7 +2288,8 @@ function renderCatChips(type){
       listEl, newUp, newDown,
       ()=>type==='expense'?getExpenseCats():getIncomeCats(),
       items=>mutateUser(u=>{if(type==='expense')u.expenseCats=items;else u.incomeCats=items;}),
-      ()=>{renderEntryCatPicker(); renderCatChips(type);}
+      ()=>{renderEntryCatPicker(); renderCatChips(type);},
+      taxColFn
     );
   }
 }
@@ -2611,13 +2620,34 @@ function saveEdit(){
 // ════════════════════════════════════════
 function exportCSV(){
   const txs=[...getTransactions()].sort((a,b)=>a.date.localeCompare(b.date));
-  const rows=[['日付','種別','カテゴリ','摘要','金額','メモ']];
-  txs.forEach(t=>{rows.push([t.date,t.type==='income'?'収入':'支出',t.category,t.desc||'',t.amount,t.memo||'']);});
+  // ── シート1：取引データ（相手勘定科目列を追加） ──
+  const rows=[['日付','種別','カテゴリ','摘要','金額','メモ','相手勘定科目']];
+  txs.forEach(t=>{rows.push([t.date,t.type==='income'?'収入':'支出',t.category,t.desc||'',t.amount,t.memo||'',t.account||'']);});
   const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
   const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);
   a.download=`kakeibo_${getCurrentUser().name}_${todayISO()}.csv`;a.click();
-  showToast('📄 CSVをダウンロードしました');
+
+  // ── シート2：仕訳データ ──
+  setTimeout(()=>{
+    const jRows=[['日付','勘定科目','補助科目','貸方科目','借方金額','貸方金額','摘要','メモ']];
+    txs.forEach(t=>{
+      const isExpense=t.type==='expense';
+      const acc=accountName(t.category);
+      const counterAcc=t.account||'現金・預金';
+      const debitAcc=isExpense?acc:counterAcc;
+      const creditAcc=isExpense?counterAcc:acc;
+      // 補助科目：読み替えが発生した場合は元のカテゴリ名
+      const subAcc=(isExpense&&acc!==t.category)?t.category:(!isExpense&&acc!==t.category?t.category:'');
+      jRows.push([t.date, debitAcc, subAcc, creditAcc, t.amount, t.amount, t.desc||'', t.memo||'']);
+    });
+    const jCsv=jRows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
+    const jBlob=new Blob(['\uFEFF'+jCsv],{type:'text/csv;charset=utf-8;'});
+    const b=document.createElement('a');b.href=URL.createObjectURL(jBlob);
+    b.download=`kakeibo_${getCurrentUser().name}_仕訳_${todayISO()}.csv`;b.click();
+  },300);
+
+  showToast('📄 CSV（取引＋仕訳）をダウンロードしました');
 }
 
 function exportJSON(){
