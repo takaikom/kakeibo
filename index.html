@@ -1143,10 +1143,11 @@ async function syncFromRemote(silent=false){
         }
       });
       lu.transactions.sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);
-      // 設定データ（カテゴリ・予算・勘定科目・税率）はリモート側を優先してマージ
-      // ただし現在のピンユーザー自身はローカル優先（自分の設定は自分のデバイスで管理）
+      // 設定データ（カテゴリ・予算・勘定科目・税率）の同期方針:
+      // 自分（ピンユーザー）→ リモート優先（↓受信でリモートの設定を上書き適用）
+      // 自分以外 → ローカル優先（取引のみマージ、設定はローカルを保持）
       const pinnedId=getPinnedUserId();
-      if(ru.id!==pinnedId){
+      if(ru.id===pinnedId){
         if(ru.expenseCats)lu.expenseCats=ru.expenseCats;
         if(ru.incomeCats) lu.incomeCats =ru.incomeCats;
         if(ru.expenseAccounts)lu.expenseAccounts=ru.expenseAccounts;
