@@ -1582,8 +1582,14 @@ function submitEntry(){
   if(customInput)customInput.value='';
   const accCustom=document.getElementById('entry-account-custom');
   if(accCustom)accCustom.value='';
+  const lastAccount = entrySelectedAccount; // 相手勘定科目を保持
   entrySelectedCat='';entrySelectedAccount='';
   renderEntryCatPicker();
+  // 登録後も直前に選択していた相手勘定科目を維持する
+  if(lastAccount){
+    entrySelectedAccount = lastAccount;
+    renderEntryAccountPicker();
+  }
   updateTaxPreview();
   renderHomeSummary();renderHomeBudget();renderHomeRecent();
   showToast(entryType==='expense'?'💸 支出を登録しました':'💰 収入を登録しました');
