@@ -48,9 +48,10 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
 .add-group-btn{flex-shrink:0;padding:4px 8px;font-size:11px;color:var(--text3);border:1px dashed var(--border2);border-radius:6px;background:transparent;cursor:pointer;margin-left:6px;white-space:nowrap;font-family:'Noto Sans JP',sans-serif;-webkit-tap-highlight-color:transparent;}
 
 /* ── USER TABS (オレンジ) ── */
-.user-tabs{display:flex;align-items:center;overflow-x:auto;padding:0 12px;scrollbar-width:none;border-top:1px solid var(--border);background:var(--surface);}
+.user-tabs-outer{display:flex;align-items:center;border-top:1px solid var(--border);background:var(--surface);}
+.user-tabs{display:flex;align-items:center;overflow-x:auto;padding:0 0 0 12px;scrollbar-width:none;flex:1;min-width:0;}
 .user-tabs::-webkit-scrollbar{display:none;}
-.user-tab{flex-shrink:0;padding:8px 14px;font-size:13px;font-weight:500;color:var(--text3);border:none;background:transparent;cursor:grab;border-bottom:2.5px solid transparent;margin-bottom:-1px;transition:color .15s,border-color .15s;white-space:nowrap;font-family:'Noto Sans JP',sans-serif;-webkit-tap-highlight-color:transparent;user-select:none;touch-action:none;}
+.user-tab{flex-shrink:0;padding:8px 14px;font-size:13px;font-weight:500;color:var(--text3);border:none;background:transparent;cursor:grab;border-bottom:2.5px solid transparent;margin-bottom:-1px;transition:color .15s,border-color .15s;white-space:nowrap;font-family:'Noto Sans JP',sans-serif;-webkit-tap-highlight-color:transparent;user-select:none;touch-action:pan-x;}
 .user-tab.active{color:var(--accent);border-bottom-color:var(--accent);}
 .user-tab.is-me{}
 .user-tab.is-me.active{border-bottom-color:var(--accent);}
@@ -58,7 +59,8 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
 .user-tab-ghost{position:fixed;pointer-events:none;z-index:9999;padding:8px 14px;font-size:13px;font-weight:700;color:var(--accent);background:var(--accent-light);border:1.5px solid var(--accent);border-radius:8px;white-space:nowrap;font-family:'Noto Sans JP',sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.18);opacity:.92;}
 .user-tab-drop-indicator{position:absolute;top:4px;bottom:4px;width:2.5px;background:var(--blue);border-radius:2px;pointer-events:none;z-index:10;transition:left .07s;box-shadow:0 0 0 1.5px var(--blue-light);}
 #user-tabs{position:relative;}
-.add-user-btn{flex-shrink:0;width:26px;height:26px;border-radius:50%;border:1.5px dashed var(--border2);background:transparent;color:var(--text3);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;margin-left:6px;-webkit-tap-highlight-color:transparent;}
+.add-user-btn{flex-shrink:0;width:26px;height:26px;border-radius:50%;border:1.5px dashed var(--border2);background:var(--surface);color:var(--text3);cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;margin:0 8px;-webkit-tap-highlight-color:transparent;}
+.add-user-btn:active{border-color:var(--accent);color:var(--accent);}
 
 /* ── MAIN TABS ── */
 .main-tabs{display:flex;border-top:1px solid var(--border);background:var(--surface2);overflow-x:auto;scrollbar-width:none;}
@@ -474,7 +476,10 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
       <div id="gas-sync-time" style="font-size:10px;color:var(--text3);display:none;white-space:nowrap;flex-shrink:0;margin-left:8px;"></div>
     </div>
     <div class="group-tabs" id="group-tabs"></div>
-    <div class="user-tabs" id="user-tabs"></div>
+    <div class="user-tabs-outer" id="user-tabs-outer">
+      <div class="user-tabs" id="user-tabs"></div>
+      <!-- 親モード時のみ表示。renderUserTabs()でOuter側に追加 -->
+    </div>
     <div class="main-tabs">
       <button class="main-tab active" data-tab="home">🏠 ホーム</button>
       <button class="main-tab" data-tab="list">📋 明細</button>
@@ -1118,10 +1123,10 @@ function fmtTxSeq(id){
 }
 
 async function syncFromRemote(silent=false){
-  if(!getGroupGasUrl()){setSyncDot('off');return;}
+  if(!getGroupGasUrl()){setSyncDot('off');return false;}
   if(!silent)setSyncDot('syncing');
   const remote=await remoteLoad();
-  if(!remote){if(!silent){setSyncDot('err');showToast('⚠ 同期に失敗しました');}return;}
+  if(!remote){if(!silent){setSyncDot('err');showToast('⚠ 同期に失敗しました');}return false;}
   const local=loadGroupData();
   const merged={...local};
   const remoteDeleted=remote.deletedUsers||[];
@@ -1194,6 +1199,7 @@ async function syncFromRemote(silent=false){
   if(!silent){setSyncDot('ok');showToast('✅ 受信しました');}
   else setSyncDot('ok');
   renderAll();
+  return true;
 }
 
 async function handleIdConflicts(conflicts){
@@ -1365,13 +1371,12 @@ function renderGroupTabs(){
       if(g.id===getCurrentGroupId())return;
       setCurrentGroupId(g.id);
       entryType='expense';entrySelectedCat='';
-      if(g.gasUrl&&getAutoSync()){setSyncDot('syncing');await syncFromRemote(true);}else if(g.gasUrl){setSyncDot('ok');}
-      else{
-        setSyncDot('off');
-        const pinned=getPinnedUserId();const d=loadGroupData();
-        const pid=pinned&&d.users.find(u=>u.id===pinned)?pinned:d.users[0]?.id||'';
-        setCurrentUserId(pid);renderAll();
-      }
+      const pinned=getPinnedUserId();const d=loadGroupData();
+      const pid=pinned&&d.users.find(u=>u.id===pinned)?pinned:d.users[0]?.id||'';
+      setCurrentUserId(pid);
+      if(g.gasUrl&&getAutoSync()){setSyncDot('syncing');await syncFromRemote(true);}
+      else if(g.gasUrl){setSyncDot('ok');renderAll();}
+      else{setSyncDot('off');renderAll();}
     });
     tabs.appendChild(btn);
   });
@@ -1491,6 +1496,8 @@ function renderUserTabs(){
     hideDropIndicator();
     if(ghost){ghost.remove();ghost=null;}
     tabs.querySelectorAll('.drag-dragging').forEach(el=>el.classList.remove('drag-dragging'));
+    // touch-action を元に戻す
+    tabs.querySelectorAll('.user-tab').forEach(el=>el.style.touchAction='');
     const toIdx=insertIdx;
     // 挿入位置が元の位置と変わらない場合はキャンセル
     const moved=(toIdx!==null&&toIdx!==dragSrcIdx&&toIdx!==dragSrcIdx+1);
@@ -1517,6 +1524,8 @@ function renderUserTabs(){
       isDragging=false;
       longPressTimer=setTimeout(()=>{
         isDragging=true;
+        // ドラッグ中はスクロールを止める
+        tabs.querySelectorAll('.user-tab').forEach(el=>el.style.touchAction='none');
         const rect=btn.getBoundingClientRect();
         dragOffX=startX-rect.left;
         dragOffY=startY-rect.top;
@@ -1563,6 +1572,7 @@ function renderUserTabs(){
       if(ghost){ghost.remove();ghost=null;}
       hideDropIndicator();
       tabs.querySelectorAll('.drag-dragging').forEach(el=>el.classList.remove('drag-dragging'));
+      tabs.querySelectorAll('.user-tab').forEach(el=>el.style.touchAction='');
       isDragging=false;dragSrcIdx=null;insertIdx=null;
     },{passive:true});
 
@@ -1616,11 +1626,15 @@ function renderUserTabs(){
   document.addEventListener('mousemove',onMouseMove);
   document.addEventListener('mouseup',onMouseUp);
 
+  // ＋ボタンはスクロール領域の外（outer）に常時表示
+  const outer=document.getElementById('user-tabs-outer');
+  // 既存の＋ボタンを除去してから再追加
+  outer.querySelectorAll('.add-user-btn').forEach(b=>b.remove());
   if(parent){
     const addBtn=document.createElement('button');
     addBtn.className='add-user-btn';addBtn.title='メンバーを追加';addBtn.textContent='+';
     addBtn.addEventListener('click',showAddUserForm);
-    tabs.appendChild(addBtn);
+    outer.appendChild(addBtn);
   }
 }
 
@@ -3663,13 +3677,18 @@ document.getElementById('gas-save-btn').addEventListener('click',async()=>{
   if(!url){showToast('⚠ URLを入力してください');return;}
   const status=document.getElementById('gas-status-text');
   status.textContent='接続確認中…';setSyncDot('syncing');
-  try{
-    setGroupGasUrl(url);
-    await syncFromRemote(false);
+  setGroupGasUrl(url);
+  const ok=await syncFromRemote(false);
+  if(ok){
     refreshGasStatus();
     showToast('✅ GAS連携を設定しました');
     renderGroupTabs();
-  }catch(e){setSyncDot('err');status.textContent='❌ 接続できませんでした';showToast('⚠ 接続に失敗しました');}
+  }else{
+    // URL は保存済み・接続だけ失敗
+    setSyncDot('err');
+    status.textContent='❌ 接続できませんでした（URLを確認してください）';
+    renderGroupTabs();
+  }
 });
 document.getElementById('gas-clear-btn').addEventListener('click',()=>{
   if(!confirm('GAS連携を解除しますか？'))return;
