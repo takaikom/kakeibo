@@ -1029,8 +1029,18 @@ async function remoteSave(data){
 async function saveData(){
   const local=loadGroupData();
   saveGroupData(local);
-  // 自動同期なし。ローカル保存のみ。
-  setSyncDot(getGroupGasUrl()?'ok':'off');
+  // 自動同期ONかつGAS URL設定済みなら送信も実施
+  if(getGroupGasUrl()&&getAutoSync()){
+    const gs=loadGroups();const id=getCurrentGroupId();
+    const cg=gs.find(g=>g.id===id);
+    const ok=await remoteSave(cg?{...local,groupName:cg.name}:local);
+    if(ok){
+      const now=new Date().toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+      setGasSyncTime('upload',now);
+    }
+  }else{
+    setSyncDot(getGroupGasUrl()?'ok':'off');
+  }
 }
 
 // ── IDシステム: YYYYMMDD-NN形式（文字列） ──
@@ -3505,7 +3515,7 @@ document.getElementById('gas-clear-btn').addEventListener('click',()=>{
 document.getElementById('gas-auto-sync-btn').addEventListener('click',()=>{
   const next=!getAutoSync();
   setAutoSync(next);
-  showToast(next?'🔄 自動同期: ON（起動時・グループ切替時に受信）':'⏸ 自動同期: OFF（手動のみ）');
+  showToast(next?'🔄 自動同期: ON（保存時に送信・起動時に受信）':'⏸ 自動同期: OFF（手動のみ）');
 });
 
 
