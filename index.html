@@ -338,6 +338,26 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
 .npk.zero{grid-column:span 2;}
 .npk.enter{background:var(--accent);color:white;border-color:var(--accent);font-size:13px;font-family:'Noto Sans JP',sans-serif;font-weight:700;}
 .npk.enter:active{background:var(--accent-dark);}
+/* ── DEFERRED PAYMENT (未払金・未収金) ── */
+.deferred-row{margin-bottom:10px;border:1.5px solid var(--border2);border-radius:12px;overflow:hidden;}
+.deferred-toggle-row{display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--surface2);cursor:pointer;}
+.deferred-toggle-row.active-expense{background:var(--amber-light);border-bottom:1.5px solid var(--amber);}
+.deferred-toggle-row.active-income{background:var(--blue-light);border-bottom:1.5px solid var(--blue);}
+.deferred-toggle-label{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text2);cursor:pointer;user-select:none;flex:1;}
+.deferred-toggle-label input[type=checkbox]{width:16px;height:16px;accent-color:var(--amber);cursor:pointer;}
+.deferred-badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;margin-left:auto;flex-shrink:0;}
+.deferred-badge.unpaid{background:var(--amber-light);color:var(--amber);border:1px solid var(--amber);}
+.deferred-badge.paid{background:var(--green-light);color:var(--green);border:1px solid var(--green);}
+.deferred-dates{padding:10px 12px;background:var(--surface);display:none;}
+.deferred-dates.open{display:block;}
+.deferred-date-row{display:flex;gap:8px;align-items:flex-end;margin-bottom:8px;}
+.deferred-date-row:last-child{margin-bottom:0;}
+.deferred-date-label{font-size:11px;font-weight:600;color:var(--text3);margin-bottom:4px;display:block;}
+/* カード上バッジ */
+.tx-deferred-badge{display:inline-block;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;margin-left:4px;vertical-align:middle;flex-shrink:0;}
+.tx-deferred-badge.unpaid{background:var(--amber-light);color:var(--amber);border:1px solid var(--amber);}
+.tx-deferred-badge.paid{background:var(--green-light);color:var(--green);border:1px solid var(--green);}
+
 /* ── TAX TOGGLE ── */
 .tax-row{display:flex;align-items:center;gap:10px;margin-bottom:10px;padding:8px 12px;background:var(--surface2);border-radius:10px;}
 .tax-checkbox-label{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text2);cursor:pointer;user-select:none;}
@@ -568,6 +588,28 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
     </div>
     <div style="margin-bottom:10px;">
       <input class="form-input" id="entry-account-custom" type="text" placeholder="または直接入力（例：普通預金、現金）" maxlength="20" style="width:100%;" oninput="onEntryAccountCustomInput(this.value)">
+    </div>
+    <!-- 支払保留（未払金・未収金） -->
+    <div class="deferred-row" id="entry-deferred-row">
+      <div class="deferred-toggle-row" id="entry-deferred-toggle-row" onclick="toggleEntryDeferred()">
+        <label class="deferred-toggle-label" onclick="event.stopPropagation()">
+          <input type="checkbox" id="entry-deferred-check" onchange="toggleEntryDeferred()">
+          <span id="entry-deferred-label">💳 支払保留として記録（未払金・未収金）</span>
+        </label>
+      </div>
+      <div class="deferred-dates" id="entry-deferred-dates">
+        <div class="deferred-date-row">
+          <div style="flex:1;">
+            <span class="deferred-date-label" id="entry-obligation-label">債務発生日（取引日）</span>
+            <input class="date-input" id="entry-obligation-date" type="date" style="width:100%;">
+          </div>
+          <div style="flex:1;">
+            <span class="deferred-date-label">支払日（決済日）</span>
+            <input class="date-input" id="entry-payment-date" type="date" style="width:100%;">
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--text3);padding:2px 0 4px;">支払日を空欄にすると「未決済」として管理できます。</div>
+      </div>
     </div>
     <div class="form-label">メモ</div>
     <textarea class="memo-input" id="entry-memo" placeholder="メモ（任意）" maxlength="100"></textarea>
@@ -871,7 +913,29 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
         <div class="cat-picker" id="edit-account-picker" style="flex:1;flex-wrap:wrap;gap:6px;margin-bottom:0;"></div>
       </div>
       <input class="form-input" id="edit-account-custom" type="text" placeholder="または直接入力（例：普通預金、現金）" maxlength="20" style="width:100%;margin-bottom:10px;" oninput="onEditAccountCustomInput(this.value)">
-      <!-- 6. メモ -->
+      <!-- 6. 支払保留（未払金・未収金） -->
+      <div class="deferred-row" id="edit-deferred-row">
+        <div class="deferred-toggle-row" id="edit-deferred-toggle-row" onclick="toggleEditDeferred()">
+          <label class="deferred-toggle-label" onclick="event.stopPropagation()">
+            <input type="checkbox" id="edit-deferred-check" onchange="toggleEditDeferred()">
+            <span id="edit-deferred-label">💳 支払保留として記録（未払金・未収金）</span>
+          </label>
+        </div>
+        <div class="deferred-dates" id="edit-deferred-dates">
+          <div class="deferred-date-row">
+            <div style="flex:1;">
+              <span class="deferred-date-label" id="edit-obligation-label">債務発生日（取引日）</span>
+              <input class="date-input" id="edit-obligation-date" type="date" style="width:100%;">
+            </div>
+            <div style="flex:1;">
+              <span class="deferred-date-label">支払日（決済日）</span>
+              <input class="date-input" id="edit-payment-date" type="date" style="width:100%;">
+            </div>
+          </div>
+          <div style="font-size:11px;color:var(--text3);padding:2px 0 4px;">支払日を空欄にすると「未決済」として管理できます。</div>
+        </div>
+      </div>
+      <!-- 7. メモ -->
       <div class="sheet-label">メモ</div>
       <textarea class="memo-input" id="edit-memo" maxlength="100" style="margin-bottom:4px;"></textarea>
     </div>
@@ -2001,6 +2065,67 @@ renderEntryCatPicker = function() {
   }
 };
 
+// ════════════════════════════════════════
+// DEFERRED PAYMENT (未払金・未収金)
+// ════════════════════════════════════════
+function getDeferredTypeName(txType){
+  return txType==='expense'?'未払金':'未収金';
+}
+
+function updateDeferredUI(prefix, txType){
+  const check = document.getElementById(prefix+'-deferred-check');
+  const toggleRow = document.getElementById(prefix+'-deferred-toggle-row');
+  const datesDiv = document.getElementById(prefix+'-deferred-dates');
+  const labelSpan = document.getElementById(prefix+'-deferred-label');
+  const obligLabel = document.getElementById(prefix+'-obligation-label');
+  if(!check) return;
+  const isChecked = check.checked;
+  const typeName = getDeferredTypeName(txType);
+  if(labelSpan) labelSpan.textContent = '💳 支払保留として記録（'+(txType==='expense'?'未払金':'未収金')+'）';
+  if(obligLabel) obligLabel.textContent = txType==='expense'?'債務発生日（取引日）':'債権発生日（取引日）';
+  if(toggleRow){
+    toggleRow.className = 'deferred-toggle-row' + (isChecked ? (txType==='expense'?' active-expense':' active-income') : '');
+  }
+  if(datesDiv){
+    datesDiv.className = 'deferred-dates' + (isChecked?' open':'');
+  }
+  // Check の accent color
+  if(check) check.style.accentColor = txType==='expense'?'var(--amber)':'var(--blue)';
+}
+
+function toggleEntryDeferred(){
+  const check = document.getElementById('entry-deferred-check');
+  if(!check) return;
+  // Sync checkbox state (called both from label onchange and row onclick)
+  updateDeferredUI('entry', entryType);
+  // Default obligation date to entry date
+  if(check.checked){
+    const obligDate = document.getElementById('entry-obligation-date');
+    if(obligDate && !obligDate.value){
+      obligDate.value = document.getElementById('entry-date').value || todayISO();
+    }
+  }
+}
+
+function toggleEditDeferred(){
+  const check = document.getElementById('edit-deferred-check');
+  if(!check) return;
+  updateDeferredUI('edit', editType);
+  if(check.checked){
+    const obligDate = document.getElementById('edit-obligation-date');
+    if(obligDate && !obligDate.value){
+      obligDate.value = document.getElementById('edit-date').value || todayISO();
+    }
+  }
+}
+
+// entryType変更時にラベルを更新
+const _origSetEntryType = setEntryType;
+setEntryType = function(type){
+  _origSetEntryType(type);
+  updateDeferredUI('entry', type);
+};
+
 function submitEntry(){
   const amtEl=document.getElementById('entry-amount');
   const rawExpr=amtEl.value; // 式を保存
@@ -2024,15 +2149,26 @@ function submitEntry(){
   const memo=document.getElementById('entry-memo').value.trim();
   const account=getEffectiveEntryAccount();
   const txId=generateTxId(date);
+  // 支払保留（未払金・未収金）情報を保存
+  const deferredCheck=document.getElementById('entry-deferred-check');
+  const isDeferred=deferredCheck&&deferredCheck.checked;
+  const obligationDate=isDeferred?(document.getElementById('entry-obligation-date').value||''):'';
+  const paymentDate=isDeferred?(document.getElementById('entry-payment-date').value||''):'';
+  const deferredType=isDeferred?getDeferredTypeName(entryType):'';
   // 税抜き情報を保存
   const tx={id:txId,type:entryType,amount,category:cat,date,desc,memo,account,expr:rawExpr,
-    ...(isTaxExcl?{taxExcl:amountExcl,taxRate}:{})};
+    ...(isTaxExcl?{taxExcl:amountExcl,taxRate}:{}),
+    ...(isDeferred?{deferredType,obligationDate,paymentDate}:{})};
   mutateUser(u=>{if(!u.transactions)u.transactions=[];u.transactions.push(tx);});
   saveData();
   // 登録後は金額欄をクリア
   amtEl.value='';
   document.getElementById('entry-desc').value='';
   document.getElementById('entry-memo').value='';
+  // 支払保留欄をリセット
+  if(deferredCheck){deferredCheck.checked=false;updateDeferredUI('entry',entryType);}
+  const obligEl=document.getElementById('entry-obligation-date');if(obligEl)obligEl.value='';
+  const payEl=document.getElementById('entry-payment-date');if(payEl)payEl.value='';
   const customInput=document.getElementById('entry-cat-custom');
   if(customInput)customInput.value='';
   const accCustom=document.getElementById('entry-account-custom');
@@ -2168,15 +2304,24 @@ function renderHomeRecent(){
 // ════════════════════════════════════════
 // TX CARD
 // ════════════════════════════════════════
+function txDeferredBadgeHtml(t){
+  if(!t.deferredType) return '';
+  const settled = t.paymentDate?true:false;
+  const label = settled
+    ? (t.deferredType+'決済済 '+t.paymentDate.slice(5).replace('-','/'))
+    : (t.deferredType+'（未決済）');
+  return `<span class="tx-deferred-badge ${settled?'paid':'unpaid'}">${esc(label)}</span>`;
+}
 function txCard(t){
   const icon=CAT_ICONS[t.category]||'💴';
   const sign=t.type==='income'?'+':'-';
   const seq=fmtTxSeq(t.id);
+  const deferredBadge=txDeferredBadgeHtml(t);
   return`<div class="tx-card">
     <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);flex-shrink:0;min-width:22px;text-align:center;line-height:1.2;">#${seq}</div>
     <div class="tx-icon ${t.type}">${icon}</div>
     <div class="tx-info">
-      <div class="tx-cat ${t.type}">${esc(t.category)}</div>
+      <div class="tx-cat ${t.type}">${esc(t.category)}${deferredBadge}</div>
       <div class="tx-desc${!t.desc&&!t.memo?' no-desc':''}">${esc(t.desc||t.memo||'摘要なし')}</div>
     </div>
     <div class="tx-amount ${t.type}">${sign}¥${fmtAmt(t.amount)}</div>
@@ -2197,12 +2342,19 @@ function txCardFull(t){
   if(t.account) sub.push(t.account);
   if(t.desc)    sub.push(esc(t.desc));
   if(t.memo)    sub.push('📝 '+esc(t.memo));
+  // 支払保留情報
+  if(t.deferredType){
+    const obligStr=t.obligationDate?'債務発生:'+t.obligationDate.slice(5).replace('-','/'):'';
+    const payStr=t.paymentDate?'支払:'+t.paymentDate.slice(5).replace('-','/'):'支払日未定';
+    sub.push('💳 '+t.deferredType+(obligStr?' ('+obligStr+')':'')+(payStr?' → '+payStr:''));
+  }
   const subText=sub.length?sub.join(' · '):'<span style="color:var(--border2)">摘要なし</span>';
+  const deferredBadge=txDeferredBadgeHtml(t);
   return`<div class="tx-card">
     <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);flex-shrink:0;min-width:22px;text-align:center;line-height:1.2;">#${seq}</div>
     <div class="tx-icon ${t.type}">${icon}</div>
     <div class="tx-info">
-      <div class="tx-cat ${t.type}">${esc(t.category)}</div>
+      <div class="tx-cat ${t.type}">${esc(t.category)}${deferredBadge}</div>
       <div class="tx-desc">${subText}</div>
     </div>
     <div class="tx-amount ${t.type}">${sign}¥${fmtAmt(t.amount)}</div>
@@ -2481,7 +2633,8 @@ function renderLedger(){
   const rows=sorted.map(t=>{
     const isExpense=t.type==='expense';
     const acc=accountName(t.category);
-    const counterAcc=t.account||'現金・預金';
+    // 支払保留の場合、相手勘定を「未払金」「未収金」にする
+    const counterAcc=t.deferredType?t.deferredType:(t.account||'現金・預金');
     const debitAcc=isExpense?acc:counterAcc;
     const creditAcc=isExpense?counterAcc:acc;
     // 読み替えが発生した場合、元のカテゴリ名を薄く表示
@@ -2489,11 +2642,18 @@ function renderLedger(){
     const mainAccLabel=mainAccTranslated
       ? `${esc(isExpense?acc:acc)} <span style="color:var(--text3);font-size:10px;font-weight:400;">（${esc(t.category)}）</span>`
       : esc(isExpense?acc:acc);
+    // 支払保留バッジ
+    const deferredLedgerBadge=t.deferredType
+      ? `<span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;margin-left:4px;background:${t.paymentDate?'var(--green-light)':'var(--amber-light)'};color:${t.paymentDate?'var(--green)':'var(--amber)'};border:1px solid ${t.paymentDate?'var(--green)':'var(--amber)'};">${t.paymentDate?'決済済':'未決済'}</span>`
+      : '';
+    // 支払保留の補足情報
+    const obligStr=t.obligationDate?'　債務発生日:'+t.obligationDate:'';
+    const payStr=t.paymentDate?'　支払日:'+t.paymentDate:'';
     if(isExpense)totalDebit+=t.amount;else totalCredit+=t.amount;
     return`<div class="ledger-row ${isExpense?'expense-row':'income-row'}">
       <div class="ledger-cell">
-        <div class="ledger-acc">${fmtDateShort(t.date)}　${mainAccLabel}</div>
-        <div class="ledger-acc-sub" style="padding-left:14px;">　（${esc(creditAcc)}）${t.desc?'　'+esc(t.desc):''}</div>
+        <div class="ledger-acc">${fmtDateShort(t.date)}　${mainAccLabel}${deferredLedgerBadge}</div>
+        <div class="ledger-acc-sub" style="padding-left:14px;">　（${esc(creditAcc)}）${t.desc?'　'+esc(t.desc):''}${obligStr?'<span style="color:var(--text3);font-size:10px;">'+obligStr+payStr+'</span>':''}</div>
       </div>
       <div class="ledger-cell mono debit">${isExpense?'¥'+fmtAmt(t.amount):''}</div>
       <div class="ledger-cell mono credit">${!isExpense?'¥'+fmtAmt(t.amount):''}</div>
@@ -3149,6 +3309,16 @@ function openEdit(id){
     if(accCustomInput)accCustomInput.value='';
   }
   renderEditAccountPicker(editSelectedAccount==='__custom_acc__'?'':editSelectedAccount);
+  // 支払保留（未払金・未収金）情報を復元
+  const editDeferredCheckEl=document.getElementById('edit-deferred-check');
+  const editObligEl=document.getElementById('edit-obligation-date');
+  const editPayEl=document.getElementById('edit-payment-date');
+  if(editDeferredCheckEl){
+    editDeferredCheckEl.checked=!!(tx.deferredType);
+    if(editObligEl) editObligEl.value=tx.obligationDate||'';
+    if(editPayEl) editPayEl.value=tx.paymentDate||'';
+    updateDeferredUI('edit', editType);
+  }
   document.getElementById('edit-sheet').classList.add('open');
   if(window.matchMedia('(pointer: coarse)').matches){
     setTimeout(()=>{
@@ -3168,6 +3338,7 @@ function setEditType(type){
   renderEditCatPicker('');
   renderEditAccountPicker('');
   updateEditTaxPreview();
+  updateDeferredUI('edit', type);
 }
 function renderEditCatPicker(selected){
   const cats=editType==='expense'?getExpenseCats():getIncomeCats();
@@ -3242,6 +3413,12 @@ function saveEdit(){
   const desc=document.getElementById('edit-desc').value.trim();
   const memo=document.getElementById('edit-memo').value.trim();
   const account=getEffectiveEditAccount();
+  // 支払保留（未払金・未収金）情報
+  const editDeferredCheck=document.getElementById('edit-deferred-check');
+  const editIsDeferred=editDeferredCheck&&editDeferredCheck.checked;
+  const editObligationDate=editIsDeferred?(document.getElementById('edit-obligation-date').value||''):'';
+  const editPaymentDate=editIsDeferred?(document.getElementById('edit-payment-date').value||''):'';
+  const editDeferredType=editIsDeferred?getDeferredTypeName(editType):'';
   const taxFields=isTaxExcl?{taxExcl:amountExcl,taxRate}:{taxExcl:undefined,taxRate:undefined};
   mutateUser(u=>{
     const i=u.transactions.findIndex(t=>String(t.id)===String(editingId));
@@ -3249,6 +3426,13 @@ function saveEdit(){
       const base={...u.transactions[i],type:editType,amount,category:cat,date,desc,memo,account,expr:rawExpr};
       if(isTaxExcl){base.taxExcl=amountExcl;base.taxRate=taxRate;}
       else{delete base.taxExcl;delete base.taxRate;}
+      if(editIsDeferred){
+        base.deferredType=editDeferredType;
+        base.obligationDate=editObligationDate;
+        base.paymentDate=editPaymentDate;
+      }else{
+        delete base.deferredType;delete base.obligationDate;delete base.paymentDate;
+      }
       u.transactions[i]=base;
     }
   });
@@ -3263,8 +3447,8 @@ function saveEdit(){
 function exportCSV(){
   const txs=[...getTransactions()].sort((a,b)=>a.date.localeCompare(b.date));
   // ── シート1：取引データ（相手勘定科目列を追加） ──
-  const rows=[['日付','種別','カテゴリ','摘要','金額','メモ','相手勘定科目']];
-  txs.forEach(t=>{rows.push([t.date,t.type==='income'?'収入':'支出',t.category,t.desc||'',t.amount,t.memo||'',t.account||'']);});
+  const rows=[['日付','種別','カテゴリ','摘要','金額','メモ','相手勘定科目','支払区分','債務発生日','支払日']];
+  txs.forEach(t=>{rows.push([t.date,t.type==='income'?'収入':'支出',t.category,t.desc||'',t.amount,t.memo||'',t.account||'',t.deferredType||'',t.obligationDate||'',t.paymentDate||'']);});
   const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
   const blob=new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8;'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);
@@ -3945,6 +4129,7 @@ document.getElementById('wc-new-name').addEventListener('keydown',e=>{if(e.key==
 // ════════════════════════════════════════
 updateDateDisplay();
 setInterval(updateDateDisplay,60000);
+updateDeferredUI('entry', 'expense'); // 初期化
 ensureDefaultGroup();
 // 既存IDの正規化はinit()内でグループ確定後に実行
 
