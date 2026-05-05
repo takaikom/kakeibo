@@ -586,15 +586,17 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
     <div id="entry-account-row" style="display:flex;gap:6px;margin-bottom:4px;">
       <div class="cat-picker" id="entry-account-picker" style="flex:1;flex-wrap:wrap;gap:6px;margin-bottom:0;"></div>
     </div>
-    <div style="margin-bottom:10px;">
-      <input class="form-input" id="entry-account-custom" type="text" placeholder="または直接入力（例：普通預金、現金）" maxlength="20" style="width:100%;" oninput="onEntryAccountCustomInput(this.value)">
+    <!-- 直接入力 + 支払保留チェック：1行 -->
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+      <input class="form-input" id="entry-account-custom" type="text" placeholder="または直接入力" maxlength="20" style="flex:1;min-width:0;" oninput="onEntryAccountCustomInput(this.value)">
+      <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text2);white-space:nowrap;cursor:pointer;flex-shrink:0;">
+        <input type="checkbox" id="entry-deferred-check" onchange="toggleEntryDeferred()" style="width:14px;height:14px;accent-color:var(--amber);cursor:pointer;flex-shrink:0;">
+        <span id="entry-deferred-label" style="white-space:nowrap;">支払保留（未払金）</span>
+      </label>
     </div>
-    <!-- 支払保留（未払金・未収金） -->
-    <div class="deferred-row" id="entry-deferred-row">
-      <div class="deferred-toggle-row" id="entry-deferred-toggle-row" onclick="toggleEntryDeferred()">
+    <div class="deferred-row" id="entry-deferred-row" style="border:none;margin-bottom:4px;">
+      <div class="deferred-toggle-row" id="entry-deferred-toggle-row" style="display:none;">
         <label class="deferred-toggle-label" onclick="event.stopPropagation()">
-          <input type="checkbox" id="entry-deferred-check" onchange="toggleEntryDeferred()">
-          <span id="entry-deferred-label">💳 支払保留として記録（未払金・未収金）</span>
         </label>
       </div>
       <div class="deferred-dates" id="entry-deferred-dates">
@@ -912,13 +914,18 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
       <div style="display:flex;gap:6px;margin-bottom:4px;">
         <div class="cat-picker" id="edit-account-picker" style="flex:1;flex-wrap:wrap;gap:6px;margin-bottom:0;"></div>
       </div>
-      <input class="form-input" id="edit-account-custom" type="text" placeholder="または直接入力（例：普通預金、現金）" maxlength="20" style="width:100%;margin-bottom:10px;" oninput="onEditAccountCustomInput(this.value)">
+      <!-- 直接入力 + 支払保留チェック：1行 -->
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+        <input class="form-input" id="edit-account-custom" type="text" placeholder="または直接入力" maxlength="20" style="flex:1;min-width:0;" oninput="onEditAccountCustomInput(this.value)">
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:var(--text2);white-space:nowrap;cursor:pointer;flex-shrink:0;">
+          <input type="checkbox" id="edit-deferred-check" onchange="toggleEditDeferred()" style="width:14px;height:14px;accent-color:var(--amber);cursor:pointer;flex-shrink:0;">
+          <span id="edit-deferred-label" style="white-space:nowrap;">支払保留（未払金）</span>
+        </label>
+      </div>
       <!-- 6. 支払保留（未払金・未収金） -->
-      <div class="deferred-row" id="edit-deferred-row">
-        <div class="deferred-toggle-row" id="edit-deferred-toggle-row" onclick="toggleEditDeferred()">
+      <div class="deferred-row" id="edit-deferred-row" style="border:none;margin-bottom:4px;">
+        <div class="deferred-toggle-row" id="edit-deferred-toggle-row" style="display:none;">
           <label class="deferred-toggle-label" onclick="event.stopPropagation()">
-            <input type="checkbox" id="edit-deferred-check" onchange="toggleEditDeferred()">
-            <span id="edit-deferred-label">💳 支払保留として記録（未払金・未収金）</span>
           </label>
         </div>
         <div class="deferred-dates" id="edit-deferred-dates">
@@ -2081,7 +2088,7 @@ function updateDeferredUI(prefix, txType){
   if(!check) return;
   const isChecked = check.checked;
   const typeName = getDeferredTypeName(txType);
-  if(labelSpan) labelSpan.textContent = '💳 支払保留として記録（'+(txType==='expense'?'未払金':'未収金')+'）';
+  if(labelSpan) labelSpan.textContent = '支払保留（'+(txType==='expense'?'未払金':'未収金')+'）';
   if(obligLabel) obligLabel.textContent = txType==='expense'?'債務発生日（取引日）':'債権発生日（取引日）';
   if(toggleRow){
     toggleRow.className = 'deferred-toggle-row' + (isChecked ? (txType==='expense'?' active-expense':' active-income') : '');
