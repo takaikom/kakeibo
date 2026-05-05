@@ -1187,8 +1187,14 @@ async function syncFromRemote(silent=false){
     if(g&&g.gasUrl&&remote.groupName!==g.name){g.name=remote.groupName;saveGroups(gs);}
   }
   saveGroupData(merged);
+  // 親モードで選択中のタブが引き続き有効なら currentUserId を保持する。
+  // 無効になっていた場合のみピンユーザーへフォールバック。
   const pinned=getPinnedUserId();
-  if(pinned&&merged.users.find(u=>u.id===pinned))setCurrentUserId(pinned);
+  const currentIsValid=!!merged.users.find(u=>u.id===getCurrentUserId());
+  if(!currentIsValid){
+    if(pinned&&merged.users.find(u=>u.id===pinned))setCurrentUserId(pinned);
+    else if(merged.users.length)setCurrentUserId(merged.users[0].id);
+  }
 
   // ID衝突があれば確認ダイアログ
   const conflicts=Object.values(conflictMap);
@@ -1396,6 +1402,7 @@ function renderUserTabs(){
   const pinnedId=getPinnedUserId();
   const parent=isParentMode();
   const tabs=document.getElementById('user-tabs');
+  const prevScrollLeft=tabs.scrollLeft; // スクロール位置を保存
   tabs.innerHTML='';
   const visibleUsers=parent?d.users:d.users.filter(u=>u.id===pinnedId||(!pinnedId&&u===d.users[0]));
 
@@ -1626,6 +1633,8 @@ function renderUserTabs(){
   document.addEventListener('mousemove',onMouseMove);
   document.addEventListener('mouseup',onMouseUp);
 
+  // スクロール位置を復元（同期後のタブリセット防止）
+  requestAnimationFrame(()=>{tabs.scrollLeft=prevScrollLeft;});
   // ＋ボタンはスクロール領域の外（outer）に常時表示
   const outer=document.getElementById('user-tabs-outer');
   // 既存の＋ボタンを除去してから再追加
