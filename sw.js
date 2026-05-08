@@ -1,10 +1,9 @@
-const CACHE_NAME = 'kakeibo-v1';
+const CACHE_NAME = 'kakeibo-v2';
 const ASSETS = [
   './',
   './index.html',
   './manifest.json',
   './icons/icon-192.png',
-  './icons/icon-512.png',
   'https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;500;700&family=DM+Mono:wght@400;500&display=swap'
 ];
 
@@ -33,6 +32,9 @@ self.addEventListener('fetch', event => {
   // GAS（API通信）はキャッシュしない
   if (event.request.url.includes('script.google.com')) return;
 
+  // POST等はキャッシュしない
+  if (event.request.method !== 'GET') return;
+
   event.respondWith(
     caches.match(event.request).then(cached => {
       if (cached) return cached;
@@ -45,7 +47,7 @@ self.addEventListener('fetch', event => {
         caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
         return response;
       }).catch(() => {
-        // オフライン時はindex.htmlを返す
+        // オフライン時はindex.htmlを返す（ナビゲーションリクエストのみ）
         if (event.request.mode === 'navigate') {
           return caches.match('./index.html');
         }
