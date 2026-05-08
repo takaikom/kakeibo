@@ -1282,7 +1282,17 @@ async function syncFromRemote(silent=false){
           mergedTxs.push(rt);
         }else{
           const lt=localTxMap.get(rt.id);
-          if(!(lt.amount===rt.amount&&lt.date===rt.date&&lt.category===rt.category&&lt.desc===rt.desc)){
+          // 完全一致チェック（主要フィールドすべて同じなら衝突なし）
+          const isExactMatch=(
+            lt.amount===rt.amount &&
+            lt.date===rt.date &&
+            lt.category===rt.category &&
+            (lt.desc||'')===(rt.desc||'') &&
+            (lt.memo||'')===(rt.memo||'') &&
+            lt.type===rt.type &&
+            (lt.account||'')===(rt.account||'')
+          );
+          if(!isExactMatch){
             if(!conflictMap[rt.id])conflictMap[rt.id]={local:lt,remote:rt,user:lu};
           }
         }
@@ -1347,23 +1357,43 @@ async function handleIdConflicts(conflicts){
   return new Promise(resolve=>{
     const ov=document.createElement('div');
     ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999;display:flex;align-items:flex-end;justify-content:center;';
+
+    function txDetailHtml(tx, label, colorVar){
+      const typeLabel=tx.type==='income'?'収入':'支出';
+      return `<div style="flex:1;background:var(--surface);border-radius:8px;padding:8px 10px;font-size:11px;border:1.5px solid ${colorVar};">
+        <div style="font-weight:700;color:${colorVar};margin-bottom:4px;">${label}</div>
+        <div><b>日付:</b> ${esc(tx.date||'')}</div>
+        <div><b>種別:</b> ${typeLabel}</div>
+        <div><b>カテゴリ:</b> ${esc(tx.category||'')}</div>
+        <div><b>金額:</b> ¥${fmtAmt(tx.amount)}</div>
+        <div><b>摘要:</b> ${esc(tx.desc||'(なし)')}</div>
+        <div><b>メモ:</b> ${esc(tx.memo||'(なし)')}</div>
+        <div><b>科目:</b> ${esc(tx.account||'(なし)')}</div>
+      </div>`;
+    }
+
     const listHtml=conflicts.map((c,i)=>`
-      <div style="background:var(--surface2);border-radius:10px;padding:10px 12px;margin-bottom:8px;font-size:12px;">
-        <div style="font-weight:700;margin-bottom:4px;">ID衝突 #${c.local.id}</div>
-        <div style="color:var(--text2);">このデバイス: ¥${fmtAmt(c.local.amount)} ${c.local.category} ${c.local.date}</div>
-        <div style="color:var(--blue);">GAS側: ¥${fmtAmt(c.remote.amount)} ${c.remote.category} ${c.remote.date}</div>
-        <div style="display:flex;gap:6px;margin-top:8px;">
-          <button data-cidx="${i}" data-action="overwrite" style="flex:1;height:36px;border-radius:8px;border:1px solid var(--accent);background:var(--accent-light);color:var(--accent-dark);font-family:inherit;font-size:12px;cursor:pointer;">上書き（GAS側を採用）</button>
-          <button data-cidx="${i}" data-action="keep" style="flex:1;height:36px;border-radius:8px;border:1px solid var(--blue);background:var(--blue-light);color:var(--blue);font-family:inherit;font-size:12px;cursor:pointer;">別IDで両方残す</button>
+      <div data-conflict-idx="${i}" style="background:var(--surface2);border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:12px;">
+        <div style="font-weight:700;margin-bottom:8px;color:var(--red-mid);">⚠ ID衝突: ${esc(String(c.local.id))}</div>
+        <div style="display:flex;gap:6px;margin-bottom:10px;">
+          ${txDetailHtml(c.local,'📱 このデバイス','var(--accent)')}
+          ${txDetailHtml(c.remote,'☁️ GAS側','var(--blue)')}
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <button data-cidx="${i}" data-action="use-remote" style="width:100%;height:36px;border-radius:8px;border:1.5px solid var(--blue);background:var(--blue-light);color:var(--blue);font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;">☁️ GASを採用（このデバイスのデータを上書き）</button>
+          <button data-cidx="${i}" data-action="keep-local" style="width:100%;height:36px;border-radius:8px;border:1.5px solid var(--accent);background:var(--accent-light);color:var(--accent-dark);font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;">📱 ローカルを残す（GASデータを無視）</button>
+          <button data-cidx="${i}" data-action="keep-both" style="width:100%;height:36px;border-radius:8px;border:1.5px solid var(--green);background:var(--green-light);color:var(--green);font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;">📋 別IDで両方残す</button>
         </div>
       </div>`).join('');
-    ov.innerHTML=`<div style="background:var(--surface);border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:480px;max-height:80vh;overflow-y:auto;animation:slideUp .22s cubic-bezier(.22,1,.36,1);">
-      <div style="font-size:15px;font-weight:700;margin-bottom:12px;">⚠️ ID衝突が検出されました</div>
-      <div style="font-size:12px;color:var(--text3);margin-bottom:12px;">別デバイスで同じ日に同じ連番のIDが発行されています。各衝突について対処法を選んでください。</div>
+
+    ov.innerHTML=`<div style="background:var(--surface);border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:480px;max-height:85vh;overflow-y:auto;animation:slideUp .22s cubic-bezier(.22,1,.36,1);">
+      <div style="font-size:15px;font-weight:700;margin-bottom:6px;">⚠️ ID衝突が検出されました（${conflicts.length}件）</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:14px;">同じIDで内容が異なるデータがあります。各衝突について対処法を選んでください。</div>
       ${listHtml}
       <button id="_conf-close" style="width:100%;height:40px;border-radius:10px;border:none;background:var(--surface2);color:var(--text2);font-family:inherit;font-size:14px;cursor:pointer;margin-top:4px;">完了</button>
     </div>`;
     document.body.appendChild(ov);
+
     ov.querySelectorAll('button[data-action]').forEach(btn=>{
       btn.addEventListener('click',()=>{
         const cidx=parseInt(btn.dataset.cidx);
@@ -1371,11 +1401,15 @@ async function handleIdConflicts(conflicts){
         const d=loadGroupData();
         const u=d.users.find(u=>u.id===(c.user?c.user.id:getCurrentUserId()));
         if(!u)return;
-        if(btn.dataset.action==='overwrite'){
-          const i=u.transactions.findIndex(t=>t.id===c.local.id);
+        const action=btn.dataset.action;
+        if(action==='use-remote'){
+          // GAS採用：ローカルのこのIDのデータをGASデータで上書き
+          const i=u.transactions.findIndex(t=>String(t.id)===String(c.local.id));
           if(i>=0)u.transactions[i]={...c.remote};
-        }else{
-          // 別IDを付けてリモート側を追加（日付-枝番+1で新ID生成）
+        }else if(action==='keep-local'){
+          // ローカルのみ残す：何もしない（ローカルはそのまま）
+        }else if(action==='keep-both'){
+          // 別IDを付けてリモート側を追加
           const parts=String(c.remote.id).split('-');
           const basePart=parts[0]||String(c.remote.id);
           const seq=parseInt(parts[1]||'99')+10;
@@ -1383,8 +1417,17 @@ async function handleIdConflicts(conflicts){
           u.transactions.push({...c.remote,id:newId});
         }
         saveGroupData(d);
-        btn.closest('div[style*="border-radius:10px"]').style.opacity='0.4';
-        btn.disabled=true;
+        // 選択済み表示
+        const card=ov.querySelector(`[data-conflict-idx="${cidx}"]`);
+        if(card){
+          card.style.opacity='0.4';
+          card.querySelectorAll('button[data-action]').forEach(b=>b.disabled=true);
+          const label=action==='use-remote'?'☁️ GAS採用':action==='keep-local'?'📱 ローカル残す':'📋 別ID追加';
+          const done=document.createElement('div');
+          done.style.cssText='text-align:center;font-size:12px;font-weight:700;color:var(--check);margin-top:4px;';
+          done.textContent='✅ '+label+'で処理済み';
+          card.appendChild(done);
+        }
       });
     });
     ov.querySelector('#_conf-close').addEventListener('click',()=>{ov.remove();resolve();});
@@ -3718,11 +3761,91 @@ document.getElementById('gas-upload-btn').addEventListener('click',()=>{
 });
 
 // ヘッダー GAS↓（ダウンロード）
-document.getElementById('gas-download-btn').addEventListener('click',async()=>{
-  if(!getGroupGasUrl()){showToast('⚠ GAS URLが設定されていません（設定タブで入力）');return;}
-  await syncFromRemote(false);
+// 完全上書き受信（ローカルデータをGASで全置換）
+async function gasDownloadOverwrite(){
+  setSyncDot('syncing');
+  const remote=await remoteLoad();
+  if(!remote){setSyncDot('err');showToast('⚠ 同期に失敗しました');return;}
+  // ローカルをGASデータで完全置換（グループ設定は保持）
+  const local=loadGroupData();
+  const merged={
+    ...remote,
+    deletedUsers: remote.deletedUsers||local.deletedUsers||[]
+  };
+  saveGroupData(merged);
+  if(remote.groupName){
+    const gs=loadGroups();const id=getCurrentGroupId();
+    const g=gs.find(g=>g.id===id);
+    if(g&&g.gasUrl&&remote.groupName!==g.name){g.name=remote.groupName;saveGroups(gs);}
+  }
+  const pinned=getPinnedUserId();
+  const currentIsValid=!!merged.users.find(u=>u.id===getCurrentUserId());
+  if(!currentIsValid){
+    if(pinned&&merged.users.find(u=>u.id===pinned))setCurrentUserId(pinned);
+    else if(merged.users.length)setCurrentUserId(merged.users[0].id);
+  }
   const now=new Date().toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
   setGasSyncTime('download',now);
+  setSyncDot('ok');
+  showToast('⬇️ GASデータで完全上書きしました');
+  renderAll();
+}
+
+document.getElementById('gas-download-btn').addEventListener('click',()=>{
+  if(!getGroupGasUrl()){showToast('⚠ GAS URLが設定されていません（設定タブで入力）');return;}
+
+  const curUser=getCurrentUser();
+  const uName=curUser?curUser.name:'このユーザー';
+
+  const sel=document.createElement('div');
+  sel.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;display:flex;align-items:flex-end;justify-content:center;';
+  sel.innerHTML=`<div style="background:var(--surface);border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:480px;animation:slideUp .22s cubic-bezier(.22,1,.36,1);">
+    <div style="font-size:15px;font-weight:700;margin-bottom:4px;">⬇️ GASからダウンロード</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:16px;">受信方法を選んでください</div>
+    <button id="_gdl-merge" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px 16px;border-radius:12px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:'Noto Sans JP',sans-serif;font-size:14px;font-weight:500;cursor:pointer;margin-bottom:8px;text-align:left;">
+      <span style="width:36px;height:36px;border-radius:10px;background:var(--blue-light);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">↓</span>
+      <div>
+        <div>マージして受信（ローカルデータと統合）</div>
+        <div style="font-size:11px;color:var(--text3);font-weight:400;margin-top:1px;">ローカルの明細を保持しつつGASのデータを取り込みます。ID衝突は個別に確認できます。</div>
+      </div>
+    </button>
+    <button id="_gdl-overwrite" style="display:flex;align-items:center;gap:12px;width:100%;padding:14px 16px;border-radius:12px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:'Noto Sans JP',sans-serif;font-size:14px;font-weight:500;cursor:pointer;margin-bottom:16px;text-align:left;">
+      <span style="width:36px;height:36px;border-radius:10px;background:var(--red-light);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">⬇️</span>
+      <div>
+        <div>完全上書きで受信（GASデータで置換）</div>
+        <div style="font-size:11px;color:var(--text3);font-weight:400;margin-top:1px;">ローカルのデータをGASのデータで完全に置き換えます。ローカルのみのデータは失われます。</div>
+      </div>
+    </button>
+    <button id="_gdl-cancel" style="width:100%;height:44px;border-radius:12px;border:none;background:var(--surface2);color:var(--text2);font-family:'Noto Sans JP',sans-serif;font-size:14px;cursor:pointer;">キャンセル</button>
+  </div>`;
+  document.body.appendChild(sel);
+
+  sel.querySelector('#_gdl-merge').addEventListener('click',async()=>{
+    sel.remove();
+    await syncFromRemote(false);
+    const now=new Date().toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+    setGasSyncTime('download',now);
+  });
+  sel.querySelector('#_gdl-overwrite').addEventListener('click',()=>{
+    sel.remove();
+    // 確認ダイアログ
+    const conf=document.createElement('div');
+    conf.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:999;display:flex;align-items:flex-end;justify-content:center;';
+    conf.innerHTML=`<div style="background:var(--surface);border-radius:20px 20px 0 0;padding:20px;width:100%;max-width:480px;animation:slideUp .22s cubic-bezier(.22,1,.36,1);">
+      <div style="font-size:15px;font-weight:700;margin-bottom:8px;">⬇️ GASで完全上書き</div>
+      <div style="font-size:12px;color:var(--red-mid);margin-bottom:16px;">⚠️ このデバイスのローカルデータはGASのデータに完全に置き換えられます。ローカルのみのデータは失われます。</div>
+      <div style="display:flex;gap:8px;">
+        <button id="_gdl-ow-cancel" style="flex:1;height:44px;border-radius:12px;border:none;background:var(--surface2);color:var(--text2);font-family:inherit;font-size:14px;cursor:pointer;">キャンセル</button>
+        <button id="_gdl-ow-confirm" style="flex:1;height:44px;border-radius:12px;border:none;background:var(--red-mid);color:white;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;">完全上書きする</button>
+      </div>
+    </div>`;
+    document.body.appendChild(conf);
+    conf.querySelector('#_gdl-ow-cancel').addEventListener('click',()=>conf.remove());
+    conf.querySelector('#_gdl-ow-confirm').addEventListener('click',()=>{conf.remove();gasDownloadOverwrite();});
+    conf.addEventListener('click',e=>{if(e.target===conf)conf.remove();});
+  });
+  sel.querySelector('#_gdl-cancel').addEventListener('click',()=>sel.remove());
+  sel.addEventListener('click',e=>{if(e.target===sel)sel.remove();});
 });
 
 // ユーザー切り替え
