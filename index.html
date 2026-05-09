@@ -3758,11 +3758,13 @@ function openEdit(id){
     updateDeferredUI('edit', editType);
   }
   document.getElementById('edit-sheet').classList.add('open');
-  // テンキーを常に開く（デバイス判定に依存しない）
-  setTimeout(()=>{
-    const ep=document.getElementById('edit-numpad');
-    if(ep)ep.classList.add('open');
-  },80);
+  // タッチデバイスの場合のみedit-numpadを開く
+  if(window._numpadTouchConfirmed){
+    setTimeout(()=>{
+      const ep=document.getElementById('edit-numpad');
+      if(ep)ep.classList.add('open');
+    },80);
+  }
 }
 function setEditType(type){
   editType=type;
@@ -4820,64 +4822,61 @@ function showAmountCalcHint(el,hintId){
 // ════════════════════════════════════════
 (function setupNumpad(){
 
-  // デバイス判定は行わず、テンキーを常に有効にする。
-  // PCではキーボード入力も同時に受け付け、両立させる。
-  // （WebView/APK/PWAでpointer判定が信頼できないため）
-
   const entryEl = document.getElementById('entry-amount');
   const editEl  = document.getElementById('edit-amount');
 
-  // ── PCキーボード入力サポート（inputmodeはnoneのまま、keydownで処理）──
-  function onKeyInput(e, el, hintId){
-    // 通常のキー入力を手動で処理
-    const allowed = '0123456789.+-*/';
-    if(e.key === 'Backspace'){
-      e.preventDefault();
-      el.value = el.value.slice(0, -1);
-    } else if(e.key === 'Delete'){
-      e.preventDefault();
-      el.value = '';
-    } else if(e.key === 'Enter'){
-      e.preventDefault();
-      if(el.id==='entry-amount'){
-        document.getElementById('entry-numpad').classList.remove('open');
-        updateTaxPreview(); submitEntry();
-      } else {
-        document.getElementById('edit-numpad').classList.remove('open');
-        updateEditTaxPreview();
-      }
-      return;
-    } else if(e.key.length === 1){
-      // 全角→半角変換
-      let k = e.key
+  // ── タッチデバイス遅延判定 ──
+  // 初期判定（pointer:coarse等）はAPK/WebViewで信頼できないため、
+  // 実際のtouchstartイベントが発火した時点でタッチモードに切り替える。
+  // これによりPCではテンキー非表示、スマホでは必ず表示される。
+  let _touchConfirmed = window.matchMedia('(pointer: coarse)').matches
+    || ('ontouchstart' in window && navigator.maxTouchPoints > 0);
+  window._numpadTouchConfirmed = _touchConfirmed;
+
+  function activateTouchMode(){
+    if(_touchConfirmed) return;
+    _touchConfirmed = true;
+    window._numpadTouchConfirmed = true;
+    // inputmodeをnoneに戻してOSキーボードを抑制
+    entryEl.setAttribute('inputmode','none');
+    editEl.setAttribute('inputmode','none');
+    // フォーカス中の要素があればテンキーを開く
+    if(document.activeElement===entryEl)
+      document.getElementById('entry-numpad').classList.add('open');
+    if(document.activeElement===editEl)
+      document.getElementById('edit-numpad').classList.add('open');
+  }
+
+  // どこかで最初のタッチが発生したらタッチモード確定
+  document.addEventListener('touchstart', activateTouchMode, {once:true, passive:true});
+
+  if(!_touchConfirmed){
+    // PC初期状態: inputmodeをdecimalにしてOSキーボードを有効化
+    entryEl.setAttribute('inputmode','decimal');
+    editEl.setAttribute('inputmode','decimal');
+    // PCキーボード入力処理（全角→半角変換込み）
+    function onPcInput(el, hintId){
+      const before=el.value;
+      const after=before
         .replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0))
         .replace(/[＋]/g,'+').replace(/[－−]/g,'-')
         .replace(/[×＊]/g,'*').replace(/[÷／]/g,'/')
         .replace(/[。．]/g,'.');
-      if(allowed.includes(k)){
-        e.preventDefault();
-        const ops=['+','-','*','/'];
-        if(ops.includes(k)&&el.value.length>0&&ops.includes(el.value.slice(-1))){
-          el.value=el.value.slice(0,-1)+k;
-        } else {
-          el.value+=k;
-        }
-      } else {
-        return; // 不明なキーは無視（ブラウザデフォルト動作を許可しない）
-      }
-    } else {
-      return;
+      if(after!==before){const p=el.selectionStart;el.value=after;try{el.setSelectionRange(p,p);}catch(e){}}
+      showAmountCalcHint(el, hintId);
+      if(el.id==='entry-amount') updateTaxPreview();
     }
-    showAmountCalcHint(el, hintId);
-    if(el.id==='entry-amount') updateTaxPreview();
-    if(el.id==='edit-amount') updateEditTaxPreview();
+    entryEl.addEventListener('input', function(){ onPcInput(this,'entry-amount-hint'); });
+    editEl.addEventListener('input',  function(){ onPcInput(this,'edit-amount-hint'); updateEditTaxPreview(); });
   }
-  entryEl.addEventListener('keydown', function(e){ onKeyInput(e, this, 'entry-amount-hint'); });
-  editEl.addEventListener('keydown',  function(e){ onKeyInput(e, this, 'edit-amount-hint'); });
 
-  // ── フォーカス時にテンキーを開く（スマホ・PC共通）──
-  entryEl.addEventListener('focus', ()=>document.getElementById('entry-numpad').classList.add('open'));
-  editEl.addEventListener('focus',  ()=>document.getElementById('edit-numpad').classList.add('open'));
+  // ── フォーカス時にテンキーを開く（タッチ確定済みの場合のみ）──
+  entryEl.addEventListener('focus', ()=>{
+    if(_touchConfirmed) document.getElementById('entry-numpad').classList.add('open');
+  });
+  editEl.addEventListener('focus', ()=>{
+    if(_touchConfirmed) document.getElementById('edit-numpad').classList.add('open');
+  });
 
   // テンキーボタン押下
   document.addEventListener('click', e=>{
@@ -4976,12 +4975,30 @@ document.getElementById('parent-mode-toggle').addEventListener('change', (e) => 
 });
 </script>
 <script>
-  if ('serviceWorker' in navigator) {
+  // Service Worker: file://プロトコル(APKローカル)では登録しない
+  // 既存の古いSWが404を引き起こすため、まず全解除してから再登録する
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw.js')
-        .then(reg => console.log('SW registered:', reg.scope))
-        .catch(err => console.log('SW error:', err));
+      // 古いService Workerを全て解除してから新規登録
+      navigator.serviceWorker.getRegistrations().then(regs => {
+        const stale = regs.filter(r => !r.active || !r.active.scriptURL.endsWith('sw.js'));
+        return Promise.all(stale.map(r => r.unregister()));
+      }).then(() => {
+        return navigator.serviceWorker.register('./sw.js');
+      }).then(reg => console.log('SW registered:', reg.scope))
+        .catch(err => {
+          // sw.jsが存在しない場合は全SWを解除してエラーを握り潰す
+          console.log('SW register failed, unregistering all:', err);
+          navigator.serviceWorker.getRegistrations().then(regs =>
+            Promise.all(regs.map(r => r.unregister()))
+          );
+        });
     });
+  } else if ('serviceWorker' in navigator && location.protocol === 'file:') {
+    // file://の場合: 既存SWが残っていると404の原因になるので全解除
+    navigator.serviceWorker.getRegistrations().then(regs =>
+      Promise.all(regs.map(r => r.unregister()))
+    );
   }
 </script>
 </body>
