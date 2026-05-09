@@ -116,10 +116,10 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
 .type-btn.income.active{border-color:var(--income-color);background:var(--income-light);color:var(--income-color);}
 .type-btn.expense.active{border-color:var(--expense-color);background:var(--expense-light);color:var(--accent-dark);}
 .amount-row{display:flex;align-items:center;gap:6px;margin-bottom:10px;min-width:0;}
-.amount-prefix{font-size:20px;font-weight:700;color:var(--text3);flex-shrink:0;}
-.amount-input{flex:1;min-width:0;height:50px;border:1.5px solid var(--border2);border-radius:12px;padding:0 10px;font-family:'DM Mono',monospace;font-size:20px;font-weight:500;color:var(--text);background:var(--bg);outline:none;transition:border-color .2s;text-align:right;}
-.amount-input:focus{border-color:var(--accent);background:white;}
-.amount-input::placeholder{color:var(--text3);}
+.amount-prefix{font-size:22px;font-weight:700;color:var(--accent);flex-shrink:0;}
+.amount-input{flex:1;min-width:0;height:54px;border:2px solid var(--accent);border-radius:12px;padding:0 12px;font-family:'DM Mono',monospace;font-size:20px;font-weight:700;color:var(--text);background:#fffaf8;outline:none;transition:border-color .2s,box-shadow .2s;text-align:right;box-shadow:0 0 0 3px rgba(216,90,48,.08);}
+.amount-input:focus{border-color:var(--accent-dark);background:white;box-shadow:0 0 0 4px rgba(216,90,48,.15);}
+.amount-input::placeholder{color:var(--text3);font-weight:400;}
 .cat-picker{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:10px;}
 .cat-pick-btn{padding:6px 14px;border-radius:20px;font-size:13px;font-weight:500;cursor:pointer;border:1.5px solid var(--border2);background:var(--surface2);color:var(--text2);-webkit-tap-highlight-color:transparent;transition:all .15s;font-family:'Noto Sans JP',sans-serif;white-space:nowrap;}
 .cat-pick-btn.selected{border-color:var(--accent);background:var(--accent-light);color:var(--accent-dark);}
@@ -582,6 +582,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
       </div>
     </div>
     <!-- 金額・計算結果・登録ボタンを1行に -->
+    <div class="form-label" style="color:var(--accent);font-weight:700;font-size:12px;margin-bottom:4px;">💴 金額</div>
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;min-width:0;">
       <span class="amount-prefix" style="flex-shrink:0;">¥</span>
       <input class="amount-input" id="entry-amount" type="text" placeholder="例：600 または 300*2+100" inputmode="none" autocomplete="off" style="flex:1;min-width:0;font-size:clamp(13px,4vw,20px);">
@@ -1201,13 +1202,11 @@ async function saveData(){
     let baseUsers;
     if(remote&&remote.users){
       // 手動↑（gasUploadMerge）と同じく、明細のみ上書き・設定はサーバー側を保持
-      // ※ トランザクションはローカルで完全置換（旧IDが残らないよう）
-      // ※ habitフィールドは送信しない
       baseUsers=remote.users.map(ru=>{
         if(ru.id===curUser.id){
           return stripHabitFields({...ru, transactions:curUser.transactions||[]});
         }
-        return stripHabitFields(ru); // 他メンバーはサーバー側をそのまま維持（habitのみ除去）
+        return stripHabitFields(ru);
       });
       if(!baseUsers.find(u=>u.id===curUser.id))baseUsers.push(stripHabitFields({...curUser}));
     }else{
@@ -1217,7 +1216,6 @@ async function saveData(){
     const localDeleted=local.deletedUsers||[];
     const mergedDeleted=[...remoteDeleted];
     localDeleted.forEach(lu=>{if(!mergedDeleted.find(u=>u.id===lu.id))mergedDeleted.push(lu);});
-    // deletedUsersもhabitフィールドを除去
     const cleanMergedDeleted=mergedDeleted.map(u=>stripHabitFields(u));
     const filteredUsers=baseUsers.filter(u=>!cleanMergedDeleted.find(d=>d.id===u.id));
     const payload={users:filteredUsers,deletedUsers:cleanMergedDeleted,groupName:cg?cg.name:(remote&&remote.groupName?remote.groupName:'')};
@@ -1233,8 +1231,7 @@ async function saveData(){
 
 // ════════════════════════════════════════
 // habitフィールド除去ヘルパー
-// GASから持ち込まれた habits / archive / deletedHabitKeys フィールドを
-// ユーザーオブジェクトから取り除く（このアプリでは管理しないデータ）
+// GASから持ち込まれた habits/archive/deletedHabitKeys を除去する
 // ════════════════════════════════════════
 const HABIT_FIELDS=['habits','archive','deletedHabitKeys'];
 function stripHabitFields(user){
@@ -1243,8 +1240,6 @@ function stripHabitFields(user){
   HABIT_FIELDS.forEach(k=>delete u[k]);
   return u;
 }
-
-// ローカルストレージ内の全ユーザーからhabitフィールドを除去して保存
 function purgeHabitFieldsLocal(){
   const d=loadGroupData();
   let changed=false;
@@ -1353,8 +1348,7 @@ async function syncFromRemote(silent=false){
   // リモートのusers一覧を基準にする
   const newUsers=[];
   (remote.users||[]).forEach(ru=>{
-    // habitフィールドを受信データから除去
-    ru=stripHabitFields(ru);
+    ru=stripHabitFields(ru); // GASから届いたhabitフィールドを除去
     if(merged.deletedUsers.find(u=>u.id===ru.id))return;
     if(ru.id===curUid){
       // 開いているユーザーのみ完全同期：取引・設定すべてリモートで受信
@@ -1364,13 +1358,21 @@ async function syncFromRemote(silent=false){
       if(!ru.transactions)ru.transactions=[];
       // 取引はローカルとリモートをマージしてID衝突を検出
       const localTxMap=new Map((lu.transactions||[]).map(t=>[String(t.id),t]));
-      // ローカル取引を「内容キー」→取引 のマップも作成（旧ID復活防止用）
+      // 内容キーマップ（日付変更後の旧IDデータ復活防止用）
+      const localContentSet=new Set((lu.transactions||[]).map(t=>
+        [t.date,t.type,t.amount,t.category,t.desc||'',t.memo||'',t.account||''].join('|')
+      ));
       const mergedTxs=[...(lu.transactions||[])];
       (ru.transactions||[]).forEach(rt=>{
         if(!localTxMap.has(String(rt.id))){
-          mergedTxs.push(rt);
-        }else{
-          const lt=localTxMap.get(String(rt.id));
+          // ローカルにないID → 内容も同一のものがあれば旧IDの残骸なので追加しない
+          const ck=[rt.date,rt.type,rt.amount,rt.category,rt.desc||'',rt.memo||'',rt.account||''].join('|');
+          if(!localContentSet.has(ck))mergedTxs.push(rt);
+          return;
+        }
+        const lt=localTxMap.get(String(rt.id));
+        {
+          const lt=localTxMap.get(rt.id);
           // 完全一致チェック（主要フィールドすべて同じなら衝突なし）
           const isExactMatch=(
             lt.amount===rt.amount &&
@@ -1399,11 +1401,10 @@ async function syncFromRemote(silent=false){
       if(ru.defaultTaxRate!=null)syncedUser.defaultTaxRate=ru.defaultTaxRate;
       if(ru.isChild!=null)syncedUser.isChild=ru.isChild;
       if(ru.name)syncedUser.name=ru.name;
-      // habitフィールドが混入していた場合は除去
       HABIT_FIELDS.forEach(k=>delete syncedUser[k]);
       newUsers.push(syncedUser);
     }else{
-      // 他のユーザー：リモートデータをそのまま使用（habitフィールドは除去）
+      // 他のユーザー：リモートデータをそのまま使用（ローカルの変更は反映しない）
       if(!ru.expenseCats)ru.expenseCats=(ru.isChild?CHILD_EXPENSE_CATS:DEFAULT_EXPENSE_CATS).slice();
       if(!ru.incomeCats) ru.incomeCats =(ru.isChild?CHILD_INCOME_CATS :DEFAULT_INCOME_CATS).slice();
       if(!ru.transactions)ru.transactions=[];
@@ -2479,13 +2480,14 @@ function renderHomeBudget(){
 // HOME RECENT
 // ════════════════════════════════════════
 function renderHomeRecent(){
-  const txs=[...getTransactions()].sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
+  // 日付降順・同日内はID昇順（#01が上に来るよう）
+  const txs=[...getTransactions()].sort((a,b)=>b.date.localeCompare(a.date)||String(a.id).localeCompare(String(b.id)));
   const el=document.getElementById('home-recent');
   if(!txs.length){el.innerHTML='<div class="empty-state">まだ取引がありません<br>上のフォームから登録してみましょう</div>';return;}
-  // 日付でグループ化
-  const byDate={};
-  txs.forEach(t=>{if(!byDate[txDate(t)])byDate[txDate(t)]=[];byDate[txDate(t)].push(t);});
-  el.innerHTML=Object.entries(byDate).map(([date,ts])=>{
+  // Mapで日付グループ化（挿入順保持・数値キーの自動昇順ソート問題を回避）
+  const byDateMap=new Map();
+  txs.forEach(t=>{const d=txDate(t);if(!byDateMap.has(d))byDateMap.set(d,[]);byDateMap.get(d).push(t);});
+  el.innerHTML=[...byDateMap.entries()].map(([date,ts])=>{
     const dayIncome=ts.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
     const dayExpense=ts.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
     const net=dayIncome-dayExpense;
@@ -2676,7 +2678,8 @@ function renderTrashSection(){
 // ────────────────────────────────────────
 // スワイプ削除（スマホ）セットアップ
 // ────────────────────────────────────────
-const isPointerCoarse=window.matchMedia('(pointer:coarse)').matches;
+const isPointerCoarse=window.matchMedia('(pointer:coarse)').matches
+  ||('ontouchstart' in window)||(navigator.maxTouchPoints>0);
 
 function wrapTxCardWithSwipe(cardEl){
   if(!isPointerCoarse)return cardEl;
@@ -2891,12 +2894,14 @@ function renderList(){
     <div class="summary-card"><div class="summary-label">収入</div><div class="summary-amount income">¥${fmtAmt(income)}</div></div>
     <div class="summary-card"><div class="summary-label">支出</div><div class="summary-amount expense">¥${fmtAmt(expense)}</div></div>
     <div class="summary-card"><div class="summary-label">収支</div><div class="summary-amount ${balance>=0?'pos':'neg'}">${balance>=0?'+':'-'}¥${fmtAmt(Math.abs(balance))}</div></div>`;
-  const sorted=[...txs].sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
-  const byDate={};
-  sorted.forEach(t=>{if(!byDate[txDate(t)])byDate[txDate(t)]=[];byDate[txDate(t)].push(t);});
+  // 日付降順・同日内はID昇順（#01が上に来るよう）
+  const sorted=[...txs].sort((a,b)=>b.date.localeCompare(a.date)||String(a.id).localeCompare(String(b.id)));
+  // Mapで日付グループ化（挿入順保持・数値キーの自動昇順ソート問題を回避）
+  const byDateMap=new Map();
+  sorted.forEach(t=>{const d=txDate(t);if(!byDateMap.has(d))byDateMap.set(d,[]);byDateMap.get(d).push(t);});
   const el=document.getElementById('tx-list');
   if(!sorted.length){el.innerHTML='<div class="empty-state">取引がありません</div>';return;}
-  el.innerHTML=Object.entries(byDate).map(([date,ts])=>{
+  el.innerHTML=[...byDateMap.entries()].map(([date,ts])=>{
     const dayIncome=ts.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
     const dayExpense=ts.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
     const net=dayIncome-dayExpense;
@@ -3012,7 +3017,7 @@ function renderLedger(){
     const[y,m]=ledgerPeriod.split('-');label=`${y}年${parseInt(m)}月`;
   }else{txs=txs.filter(t=>txYear(t)===ledgerPeriod);label=`${ledgerPeriod}年`;}
   document.getElementById('ledger-period-label').textContent=label;
-  const sorted=[...txs].sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);
+  const sorted=[...txs].sort((a,b)=>a.date.localeCompare(b.date)||String(a.id).localeCompare(String(b.id)));
   let totalDebit=0,totalCredit=0;
   const rows=sorted.map(t=>{
     const isExpense=t.type==='expense';
@@ -4013,17 +4018,14 @@ async function gasUploadMerge(){
   const myUser=local.users.find(u=>u.id===curUid)||local.users[0];
 
   // 2. サーバーデータをベースに、開いているユーザーの取引のみ上書き
-  // ※ habitフィールドは送信しない
   let baseUsers;
   if(remote&&remote.users){
     baseUsers=remote.users.map(ru=>{
       if(ru.id===myUser.id){
-        // 取引データのみ上書き。設定はサーバー側を保持。habitは除去
         return stripHabitFields({...ru, transactions:myUser.transactions||[]});
       }
-      return stripHabitFields(ru); // 他メンバーはサーバー側をそのまま維持（habitのみ除去）
+      return stripHabitFields(ru);
     });
-    // サーバーにいないが自分のデバイスにいるメンバーは追加（新規追加メンバー）
     local.users.forEach(lu=>{
       if(!baseUsers.find(u=>u.id===lu.id)){
         baseUsers.push(stripHabitFields(lu));
@@ -4171,8 +4173,7 @@ async function gasDownloadOverwrite(){
   setSyncDot('syncing');
   const remote=await remoteLoad();
   if(!remote){setSyncDot('err');showToast('⚠ 同期に失敗しました');return;}
-  // ローカルをGASデータで完全置換（グループ設定は保持）
-  // GASデータからhabitフィールドを除去
+  // ローカルをGASデータで完全置換（habitフィールドを除去してから保存）
   const cleanedRemote={
     ...remote,
     users:(remote.users||[]).map(u=>stripHabitFields(u)),
@@ -4374,25 +4375,24 @@ document.getElementById('menu-deleted-groups-btn').addEventListener('click',()=>
   ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
 });
 
+
 // habit混入データ完全削除
 document.getElementById('menu-purge-habit-btn').addEventListener('click',()=>{
   closeMenu();
-  // ローカルにhabitフィールドがあるか確認
   const d=loadGroupData();
   const localHabitCount=[...d.users,...(d.deletedUsers||[])].filter(u=>HABIT_FIELDS.some(k=>k in u)).length;
   const hasGasUrl=!!getGroupGasUrl();
-
   const ov=document.createElement('div');
   ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:300;display:flex;align-items:flex-end;justify-content:center;';
   ov.innerHTML=`<div style="background:var(--surface);border-radius:20px 20px 0 0;padding:24px 20px calc(24px + env(safe-area-inset-bottom));width:100%;max-width:480px;animation:slideUp .22s cubic-bezier(.22,1,.36,1);">
     <div style="font-size:15px;font-weight:700;margin-bottom:8px;">🧹 habit混入データを完全削除</div>
-    <div style="font-size:12px;color:var(--text2);margin-bottom:12px;">別のGAS URLから同期された習慣管理データ（habits・archive・deletedHabitKeys）をこのアプリから除去します。取引データには影響しません。</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:12px;">別のGAS URLから同期された習慣管理データ（habits・archive・deletedHabitKeys）を除去します。取引データには影響しません。</div>
     <div style="background:var(--surface2);border-radius:10px;padding:10px 12px;font-size:12px;margin-bottom:12px;">
       <div>📱 ローカルのhabitフィールドを持つユーザー：<b>${localHabitCount}件</b></div>
-      ${hasGasUrl?`<div style="margin-top:4px;">☁️ GASにも同データが残っている場合は「GASにも反映」を選ぶと除去します</div>`:'<div style="margin-top:4px;color:var(--text3);">（GAS未設定）</div>'}
+      ${hasGasUrl?'<div style="margin-top:4px;">☁️ GASにも同データが残っている場合は「GASにも反映」を選ぶと除去します</div>':'<div style="margin-top:4px;color:var(--text3);">（GAS未設定）</div>'}
     </div>
     <button id="_hpb-local" style="width:100%;height:44px;border-radius:12px;border:none;background:var(--teal-light);color:var(--teal);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:8px;">📱 ローカルのみ削除</button>
-    ${hasGasUrl?`<button id="_hpb-gas" style="width:100%;height:44px;border-radius:12px;border:none;background:var(--blue-light);color:var(--blue);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:8px;">☁️ ローカル＋GASに反映（送信あり）</button>`:''}
+    ${hasGasUrl?'<button id="_hpb-gas" style="width:100%;height:44px;border-radius:12px;border:none;background:var(--blue-light);color:var(--blue);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:8px;">☁️ ローカル＋GASに反映（送信あり）</button>':''}
     <button id="_hpb-cancel" style="width:100%;height:40px;border-radius:12px;border:none;background:var(--surface2);color:var(--text2);font-family:inherit;font-size:14px;cursor:pointer;">キャンセル</button>
   </div>`;
   document.body.appendChild(ov);
@@ -4409,7 +4409,6 @@ document.getElementById('menu-purge-habit-btn').addEventListener('click',()=>{
     gasBtn.addEventListener('click',async()=>{
       ov.remove();
       purgeHabitFieldsLocal();
-      // GASにも反映：現在のローカルデータ（habit除去済み）でアップロード
       await gasUploadMerge();
       showToast('🧹 ローカル＆GASのhabitデータを除去しました');
       renderAll();
@@ -4751,7 +4750,7 @@ ensureDefaultGroup();
   migrateAllTxIds();
   // IDと日付の不整合を修復（日付変更後に旧IDが残っているデータを修正）
   repairTxIdDateMismatch();
-  // 別GAS URLから混入したhabitフィールドをローカルから除去
+  // 別GAS URLから混入したhabitフィールドをローカルから自動除去
   purgeHabitFieldsLocal();
   const pinned=getPinnedUserId();
   const d=loadGroupData();
@@ -4830,8 +4829,13 @@ function showAmountCalcHint(el,hintId){
 // ════════════════════════════════════════
 (function setupNumpad(){
 
-  // タッチデバイス判定: pointer:coarse = スマホ/タブレット, pointer:fine = マウス(PC)
-  const isTouch = window.matchMedia('(pointer: coarse)').matches;
+  // タッチデバイス判定:
+  // pointer:coarseでの判定を基本とするが、PWA(Add to Home Screen)では
+  // standalone modeでもpointerが'fine'と誤判定される端末があるため
+  // ontouchstartの有無をフォールバックとして使用する
+  const isTouch = window.matchMedia('(pointer: coarse)').matches
+    || ('ontouchstart' in window)
+    || (navigator.maxTouchPoints > 0);
 
   const entryEl = document.getElementById('entry-amount');
   const editEl  = document.getElementById('edit-amount');
