@@ -185,6 +185,36 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
 .act-btn.copy{background:var(--blue-light);color:var(--blue);border-color:var(--blue);font-size:11px;}
 .act-btn.copy:active{opacity:.7;}
 
+/* ── SWIPE DELETE (スマホ) / HOVER DELETE (PC) ── */
+.tx-swipe-wrap{position:relative;overflow:hidden;border-radius:12px;margin-bottom:6px;}
+.tx-swipe-wrap .tx-card{margin-bottom:0;border-radius:12px;position:relative;transition:transform .2s ease;will-change:transform;touch-action:pan-y;}
+.tx-swipe-bg{position:absolute;right:0;top:0;bottom:0;width:80px;background:var(--red-mid);display:flex;align-items:center;justify-content:center;border-radius:0 12px 12px 0;color:white;font-size:18px;pointer-events:none;}
+/* PC: 削除ボタンはhoverで表示 */
+@media(pointer:fine){
+  .card-actions .act-btn.del{display:none;}
+  .tx-card:hover .card-actions .act-btn.del{display:flex;}
+}
+/* スマホ: 削除ボタン非表示（スワイプで代替） */
+@media(pointer:coarse){
+  .card-actions .act-btn.del{display:none;}
+}
+
+/* ── LOCK BUTTON ── */
+.tx-lock-btn{font-size:15px;background:none;border:none;cursor:pointer;padding:2px 4px;border-radius:6px;color:var(--text3);flex-shrink:0;line-height:1;-webkit-tap-highlight-color:transparent;}
+.tx-lock-btn:active{background:var(--surface2);}
+.tx-lock-btn.locked{color:var(--red-mid);}
+
+/* ── TRASH CARD ── */
+.tx-card.trashed{opacity:.6;border-style:dashed;border-color:var(--border2);}
+.trash-card-actions{display:flex;gap:4px;flex-shrink:0;}
+.act-btn.restore{background:var(--green-light);color:var(--green);border-color:var(--green);font-size:11px;}
+.act-btn.restore:active{opacity:.7;}
+.act-btn.perm-del{background:var(--red-light);color:var(--red-mid);border-color:var(--red-mid);font-size:11px;}
+.act-btn.perm-del:active{opacity:.7;}
+
+/* ID表示を左端に */
+.tx-id-label{font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);flex-shrink:0;min-width:22px;text-align:center;line-height:1.2;}
+
 /* ── AGG ── */
 /* 親要素：左右のボタンを端に寄せる */
 .period-nav {
@@ -523,7 +553,10 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
   <div id="budget-section"></div>
   <div class="section-label">収支を記録</div>
   <div class="entry-form">
-    <div id="entry-full-id" style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:8px;text-align:right;"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+      <div id="entry-full-id" style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;"></div>
+      <button id="entry-lock-btn" onclick="toggleEntryLock()" style="font-size:13px;background:none;border:1px solid var(--border2);border-radius:8px;padding:2px 8px;cursor:pointer;color:var(--text3);font-family:inherit;white-space:nowrap;" title="この取引のロックを切り替え">🔓 解除中</button>
+    </div>
     <div class="type-toggle">
       <button class="type-btn expense active" id="type-expense" onclick="setEntryType('expense')">▼ 支出</button>
       <button class="type-btn income" id="type-income" onclick="setEntryType('income')">▲ 収入</button>
@@ -635,7 +668,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
     <button class="toggle-btn" data-lmode="all" onclick="setListMode('all')">全期間</button>
   </div>
 <!-- 【明細タブ】 -->
-  <div class="period-nav">
+  <div class="period-nav" id="list-period-nav">
     <button class="period-nav-btn" onclick="navPeriod(-1)">‹</button>
     <div class="period-center-group">
       <span class="period-label" id="list-period-label"></span>
@@ -645,6 +678,17 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
   </div>
   <div class="summary-row" id="list-summary"></div>
   <div id="tx-list"></div>
+  <!-- ゴミ箱セクション -->
+  <div id="trash-section" style="display:none;margin-top:16px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+      <div class="section-label" style="margin:0;">🗑 一時削除済み <span id="trash-count-badge" style="background:var(--amber);color:white;border-radius:99px;font-size:11px;padding:1px 7px;margin-left:4px;"></span></div>
+      <button onclick="toggleTrashSection()" id="trash-toggle-btn" style="font-size:11px;color:var(--text3);background:none;border:none;cursor:pointer;font-family:inherit;">▲ 閉じる</button>
+    </div>
+    <div id="trash-list"></div>
+  </div>
+  <div id="trash-show-row" style="text-align:center;margin-top:12px;display:none;">
+    <button onclick="toggleTrashSection()" id="trash-show-btn" style="font-size:12px;color:var(--text3);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px 16px;cursor:pointer;font-family:inherit;">🗑 削除済みを表示 <span id="trash-count-chip" style="background:var(--amber);color:white;border-radius:99px;font-size:11px;padding:1px 6px;"></span></button>
+  </div>
 </div>
 
 <!-- ══ AGG TAB ══ -->
@@ -847,7 +891,10 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
     <div class="sheet-scroll">
       <div class="sheet-handle"></div>
       <div class="sheet-title">取引を編集</div>
-      <div id="edit-full-id" style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;margin-bottom:8px;text-align:right;"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <div id="edit-full-id" style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;"></div>
+        <button id="edit-lock-btn" onclick="toggleEditLock()" style="font-size:13px;background:none;border:1px solid var(--border2);border-radius:8px;padding:2px 8px;cursor:pointer;color:var(--text3);font-family:inherit;white-space:nowrap;" title="この取引のロックを切り替え">🔓 解除中</button>
+      </div>
       <!-- 1. 支出/収入 -->
       <div class="type-toggle" style="margin-bottom:14px;">
         <button class="type-btn expense" id="edit-type-expense" onclick="setEditType('expense')">▼ 支出</button>
@@ -2217,6 +2264,10 @@ function submitEntry(){
     ...(isTaxExcl?{taxExcl:amountExcl,taxRate}:{}),
     ...(isDeferred?{deferredType,obligationDate,paymentDate}:{})};
   mutateUser(u=>{if(!u.transactions)u.transactions=[];u.transactions.push(tx);});
+  // エントリロックがONなら登録直後にロック
+  if(getEntryLockState()){
+    const s=loadLockedTxs();s.add(String(txId));saveLockedTxs(s);
+  }
   saveData();
   // 登録後は金額欄をクリア
   amtEl.value='';
@@ -2356,6 +2407,7 @@ function renderHomeRecent(){
     </div>`;
   }).join('');
   bindTxButtons(el);
+  applySwipeWraps(el);
 }
 
 // ════════════════════════════════════════
@@ -2374,8 +2426,9 @@ function txCard(t){
   const sign=t.type==='income'?'+':'-';
   const seq=fmtTxSeq(t.id);
   const deferredBadge=txDeferredBadgeHtml(t);
-  return`<div class="tx-card">
-    <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);flex-shrink:0;min-width:22px;text-align:center;line-height:1.2;">#${seq}</div>
+  const locked=isTxLocked(t.id);
+  return`<div class="tx-card" data-id="${t.id}">
+    <div class="tx-id-label">#${seq}</div>
     <div class="tx-icon ${t.type}">${icon}</div>
     <div class="tx-info">
       <div class="tx-cat ${t.type}">${esc(t.category)}${deferredBadge}</div>
@@ -2384,8 +2437,9 @@ function txCard(t){
     <div class="tx-amount ${t.type}">${sign}¥${fmtAmt(t.amount)}</div>
     <div class="card-actions">
       <button class="act-btn copy" data-id="${t.id}" title="コピーして新規登録">📋</button>
-      <button class="act-btn edit" data-id="${t.id}">✏️</button>
-      <button class="act-btn del" data-id="${t.id}">✕</button>
+      <button class="act-btn edit" data-id="${t.id}" ${locked?'disabled style="opacity:.4;cursor:not-allowed;"':''}>✏️</button>
+      <button class="act-btn del" data-id="${t.id}" ${locked?'disabled style="opacity:.4;cursor:not-allowed;"':''}>✕</button>
+      <button class="tx-lock-btn${locked?' locked':''}" data-id="${t.id}" title="${locked?'ロック中（クリックで解除）':'解除中（クリックでロック）'}">${locked?'🔒':'🔓'}</button>
     </div>
   </div>`;
 }
@@ -2407,8 +2461,9 @@ function txCardFull(t){
   }
   const subText=sub.length?sub.join(' · '):'<span style="color:var(--border2)">摘要なし</span>';
   const deferredBadge=txDeferredBadgeHtml(t);
-  return`<div class="tx-card">
-    <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text3);flex-shrink:0;min-width:22px;text-align:center;line-height:1.2;">#${seq}</div>
+  const locked=isTxLocked(t.id);
+  return`<div class="tx-card" data-id="${t.id}">
+    <div class="tx-id-label">#${seq}</div>
     <div class="tx-icon ${t.type}">${icon}</div>
     <div class="tx-info">
       <div class="tx-cat ${t.type}">${esc(t.category)}${deferredBadge}</div>
@@ -2417,23 +2472,202 @@ function txCardFull(t){
     <div class="tx-amount ${t.type}">${sign}¥${fmtAmt(t.amount)}</div>
     <div class="card-actions">
       <button class="act-btn copy" data-id="${t.id}" title="コピーして新規登録">📋</button>
-      <button class="act-btn edit" data-id="${t.id}">✏️</button>
-      <button class="act-btn del" data-id="${t.id}">✕</button>
+      <button class="act-btn edit" data-id="${t.id}" ${locked?'disabled style="opacity:.4;cursor:not-allowed;"':''}>✏️</button>
+      <button class="act-btn del" data-id="${t.id}" ${locked?'disabled style="opacity:.4;cursor:not-allowed;"':''}>✕</button>
+      <button class="tx-lock-btn${locked?' locked':''}" data-id="${t.id}" title="${locked?'ロック中（クリックで解除）':'解除中（クリックでロック）'}">${locked?'🔒':'🔓'}</button>
     </div>
   </div>`;
 }
 
+// ════════════════════════════════════════
+// LOCK STATE (ローカル保存)
+// ════════════════════════════════════════
+function lockedTxKey(){return 'kb_locked_txs_'+getCurrentGroupId()+'_'+getCurrentUserId();}
+function loadLockedTxs(){try{return new Set(JSON.parse(localStorage.getItem(lockedTxKey())||'[]'));}catch{return new Set();}}
+function saveLockedTxs(s){localStorage.setItem(lockedTxKey(),JSON.stringify([...s]));}
+function isTxLocked(id){return loadLockedTxs().has(String(id));}
+function toggleTxLock(id){
+  const s=loadLockedTxs();
+  if(s.has(String(id))){s.delete(String(id));}else{s.add(String(id));}
+  saveLockedTxs(s);
+  renderTab(currentTab);
+  if(currentTab==='home')renderHomeRecent();
+}
+
+// ════════════════════════════════════════
+// SOFT DELETE (ローカル保存)
+// ════════════════════════════════════════
+function trashedTxKey(){return 'kb_trashed_txs_'+getCurrentGroupId()+'_'+getCurrentUserId();}
+function loadTrashedTxs(){try{return JSON.parse(localStorage.getItem(trashedTxKey())||'[]');}catch{return[];}}
+function saveTrashedTxs(arr){localStorage.setItem(trashedTxKey(),JSON.stringify(arr));}
+
+function softDeleteTx(id){
+  const tx=getTransactions().find(t=>String(t.id)===String(id));
+  if(!tx)return;
+  const trashed=loadTrashedTxs();
+  trashed.push({...tx,_trashedAt:new Date().toISOString()});
+  saveTrashedTxs(trashed);
+  mutateUser(u=>{u.transactions=u.transactions.filter(t=>String(t.id)!==String(id));});
+  saveData();
+  renderTab(currentTab);renderHomeSummary();renderHomeBudget();
+  showToast('🗑 一時削除しました（明細タブのゴミ箱から復元可能）');
+}
+
+function restoreTx(id){
+  const trashed=loadTrashedTxs();
+  const idx=trashed.findIndex(t=>String(t.id)===String(id));
+  if(idx<0)return;
+  const tx={...trashed[idx]};delete tx._trashedAt;
+  mutateUser(u=>{if(!u.transactions)u.transactions=[];u.transactions.push(tx);});
+  trashed.splice(idx,1);
+  saveTrashedTxs(trashed);
+  saveData();
+  renderTab(currentTab);renderHomeSummary();renderHomeBudget();
+  showToast('↩️ 復元しました');
+}
+
+function permDeleteTx(id){
+  if(!confirm('この取引を完全に削除します。元に戻せません。よろしいですか？'))return;
+  const trashed=loadTrashedTxs().filter(t=>String(t.id)!==String(id));
+  saveTrashedTxs(trashed);
+  renderTrashSection();
+  showToast('🗑 完全に削除しました');
+}
+
+let trashSectionOpen=false;
+function toggleTrashSection(){
+  trashSectionOpen=!trashSectionOpen;
+  renderTrashSection();
+}
+
+function renderTrashSection(){
+  const trashed=loadTrashedTxs();
+  const showRow=document.getElementById('trash-show-row');
+  const section=document.getElementById('trash-section');
+  const countChip=document.getElementById('trash-count-chip');
+  const countBadge=document.getElementById('trash-count-badge');
+  const toggleBtn=document.getElementById('trash-toggle-btn');
+  const showBtn=document.getElementById('trash-show-btn');
+  if(!showRow||!section)return;
+  if(countChip)countChip.textContent=trashed.length;
+  if(countBadge)countBadge.textContent=trashed.length;
+  if(trashed.length===0){showRow.style.display='none';section.style.display='none';return;}
+  if(!trashSectionOpen){
+    showRow.style.display='';section.style.display='none';
+    return;
+  }
+  showRow.style.display='none';section.style.display='';
+  if(toggleBtn)toggleBtn.textContent='▲ 閉じる';
+  const listEl=document.getElementById('trash-list');
+  if(!listEl)return;
+  listEl.innerHTML=trashed.slice().reverse().map(t=>{
+    const icon=CAT_ICONS[t.category]||'💴';
+    const sign=t.type==='income'?'+':'-';
+    const seq=fmtTxSeq(t.id);
+    return`<div class="tx-card trashed" style="margin-bottom:6px;">
+      <div class="tx-id-label">#${seq}</div>
+      <div class="tx-icon ${t.type}">${icon}</div>
+      <div class="tx-info">
+        <div class="tx-cat ${t.type}">${esc(t.category)}</div>
+        <div class="tx-desc">${esc(t.date)} ${esc(t.desc||t.memo||'摘要なし')}</div>
+      </div>
+      <div class="tx-amount ${t.type}">${sign}¥${fmtAmt(t.amount)}</div>
+      <div class="trash-card-actions">
+        <button class="act-btn restore" data-tid="${t.id}" style="width:auto;padding:0 8px;font-size:11px;">↩️復元</button>
+        <button class="act-btn perm-del" data-tid="${t.id}" style="width:auto;padding:0 8px;font-size:11px;">🗑完全削除</button>
+      </div>
+    </div>`;
+  }).join('');
+  listEl.querySelectorAll('.act-btn.restore').forEach(b=>b.addEventListener('click',()=>restoreTx(b.dataset.tid)));
+  listEl.querySelectorAll('.act-btn.perm-del').forEach(b=>b.addEventListener('click',()=>permDeleteTx(b.dataset.tid)));
+}
+
+// ────────────────────────────────────────
+// スワイプ削除（スマホ）セットアップ
+// ────────────────────────────────────────
+const isPointerCoarse=window.matchMedia('(pointer:coarse)').matches;
+
+function wrapTxCardWithSwipe(cardEl){
+  if(!isPointerCoarse)return cardEl;
+  const id=cardEl.dataset.id;
+  if(!id)return cardEl;
+  const wrap=document.createElement('div');
+  wrap.className='tx-swipe-wrap';
+  const bg=document.createElement('div');
+  bg.className='tx-swipe-bg';
+  bg.textContent='🗑';
+  wrap.appendChild(bg);
+  wrap.appendChild(cardEl);
+
+  let startX=0,startY=0,dx=0,swiping=false,triggered=false;
+  const THRESHOLD=72;
+
+  cardEl.addEventListener('touchstart',e=>{
+    if(e.touches.length!==1)return;
+    startX=e.touches[0].clientX;startY=e.touches[0].clientY;
+    dx=0;swiping=false;triggered=false;
+    cardEl.style.transition='none';
+  },{passive:true});
+
+  cardEl.addEventListener('touchmove',e=>{
+    if(e.touches.length!==1)return;
+    const cx=e.touches[0].clientX,cy=e.touches[0].clientY;
+    const adx=Math.abs(cx-startX),ady=Math.abs(cy-startY);
+    if(!swiping&&adx<6&&ady<6)return;
+    if(!swiping){
+      if(ady>adx)return; // 縦スクロール優先
+      swiping=true;
+    }
+    dx=Math.min(0,cx-startX);
+    cardEl.style.transform=`translateX(${dx}px)`;
+    bg.style.opacity=Math.min(1,Math.abs(dx)/THRESHOLD);
+  },{passive:true});
+
+  cardEl.addEventListener('touchend',e=>{
+    if(!swiping){cardEl.style.transform='';return;}
+    cardEl.style.transition='transform .2s ease';
+    if(dx<-THRESHOLD&&!isTxLocked(id)){
+      triggered=true;
+      cardEl.style.transform='translateX(-110%)';
+      setTimeout(()=>{softDeleteTx(id);},200);
+    }else{
+      cardEl.style.transform='';
+    }
+    bg.style.opacity='';
+  },{passive:true});
+
+  return wrap;
+}
+
 function bindTxButtons(el){
   el.querySelectorAll('.act-btn.copy').forEach(b=>b.addEventListener('click',()=>copyTx(b.dataset.id)));
-  el.querySelectorAll('.act-btn.edit').forEach(b=>b.addEventListener('click',()=>openEdit(b.dataset.id)));
-  el.querySelectorAll('.act-btn.del').forEach(b=>b.addEventListener('click',()=>deleteTx(b.dataset.id)));
+  el.querySelectorAll('.act-btn.edit').forEach(b=>b.addEventListener('click',e=>{
+    if(b.disabled)return;
+    openEdit(b.dataset.id);
+  }));
+  el.querySelectorAll('.act-btn.del').forEach(b=>b.addEventListener('click',e=>{
+    if(b.disabled)return;
+    softDeleteTx(b.dataset.id);
+  }));
+  el.querySelectorAll('.tx-lock-btn').forEach(b=>b.addEventListener('click',()=>toggleTxLock(b.dataset.id)));
+  // ゴミ箱セクション更新
+  renderTrashSection();
+}
+
+// スワイプラップをtx-cardリストに適用
+function applySwipeWraps(el){
+  if(!isPointerCoarse)return;
+  el.querySelectorAll('.tx-card[data-id]').forEach(card=>{
+    if(card.parentElement&&card.parentElement.classList.contains('tx-swipe-wrap'))return;
+    const wrap=wrapTxCardWithSwipe(card);
+    if(wrap!==card){
+      card.parentElement.insertBefore(wrap,card);
+    }
+  });
 }
 
 function deleteTx(id){
-  if(!confirm('この取引を削除しますか？'))return;
-  mutateUser(u=>{u.transactions=u.transactions.filter(t=>String(t.id)!==String(id));});
-  saveData();renderTab(currentTab);renderHomeSummary();renderHomeBudget();
-  showToast('🗑 削除しました');
+  softDeleteTx(id);
 }
 
 // 取引をコピーして「収支を記録」フォームに展開（日付だけ今日）
@@ -2584,6 +2818,8 @@ function renderList(){
     </div>`;
   }).join('');
   bindTxButtons(el);
+  applySwipeWraps(el);
+  renderTrashSection();
 }
 
 // ════════════════════════════════════════
@@ -3300,12 +3536,69 @@ function renderMemberSettings(){
 let editingId=null;
 let editType='expense';
 
+// ──────────────────────────────────────
+// 収支を記録フォームのロックボタン（IDに紐付けて連動）
+// ──────────────────────────────────────
+function updateEntryLockBtn(){
+  const btn=document.getElementById('entry-lock-btn');
+  if(!btn)return;
+  // entry-full-id からIDを取得（プレビュー中のIDを使用）
+  const idEl=document.getElementById('entry-full-id');
+  const text=idEl?idEl.textContent:'';
+  const m=text.match(/ID:\s*(.+)/);
+  // フォームはnewエントリなのでロック不要（新規登録後ロックするならtxCardのロックを使う）
+  // ここはUIとして今後登録する取引の「最初からロック」切り替え
+  const isLocked=btn.dataset.locked==='1';
+  btn.textContent=isLocked?'🔒 ロック中':'🔓 解除中';
+  btn.style.color=isLocked?'var(--red-mid)':'var(--text3)';
+  btn.style.borderColor=isLocked?'var(--red-mid)':'var(--border2)';
+}
+function toggleEntryLock(){
+  const btn=document.getElementById('entry-lock-btn');
+  if(!btn)return;
+  btn.dataset.locked=btn.dataset.locked==='1'?'0':'1';
+  updateEntryLockBtn();
+}
+function getEntryLockState(){
+  const btn=document.getElementById('entry-lock-btn');
+  return btn&&btn.dataset.locked==='1';
+}
+
+function updateEditLockBtn(id){
+  const btn=document.getElementById('edit-lock-btn');
+  if(!btn)return;
+  const locked=id?isTxLocked(id):false;
+  btn.dataset.locked=locked?'1':'0';
+  btn.dataset.txid=id||'';
+  btn.textContent=locked?'🔒 ロック中':'🔓 解除中';
+  btn.style.color=locked?'var(--red-mid)':'var(--text3)';
+  btn.style.borderColor=locked?'var(--red-mid)':'var(--border2)';
+}
+function toggleEditLock(){
+  const btn=document.getElementById('edit-lock-btn');
+  if(!btn||!btn.dataset.txid)return;
+  toggleTxLock(btn.dataset.txid);
+  // ロック状態によって編集フォームを無効化
+  const locked=isTxLocked(btn.dataset.txid);
+  btn.dataset.locked=locked?'1':'0';
+  btn.textContent=locked?'🔒 ロック中':'🔓 解除中';
+  btn.style.color=locked?'var(--red-mid)':'var(--text3)';
+  btn.style.borderColor=locked?'var(--red-mid)':'var(--border2)';
+  // 保存ボタンの有効/無効
+  const saveBtn=document.querySelector('.sheet-save-btn');
+  if(saveBtn)saveBtn.disabled=locked;
+  // 削除ボタンはedit-sheetにないが、一貫性のために無効化メッセージ
+  if(locked)showToast('🔒 ロック中のため編集できません');
+}
+
 function openEdit(id){
   const tx=getTransactions().find(t=>String(t.id)===String(id));if(!tx)return;
   editingId=id;editType=tx.type;
   // フルIDを編集シートに表示
   const editIdEl=document.getElementById('edit-full-id');
   if(editIdEl)editIdEl.textContent='ID: '+String(tx.id);
+  // ロックボタン更新
+  updateEditLockBtn(id);
   document.getElementById('edit-type-expense').classList.toggle('active',tx.type==='expense');
   document.getElementById('edit-type-income').classList.toggle('active',tx.type==='income');
   // 式があれば式を、なければ金額をそのまま表示（入力値を保持）
@@ -3451,6 +3744,7 @@ function getEffectiveEditAccount(){
 function closeEditSheet(){document.getElementById('edit-sheet').classList.remove('open');}
 document.getElementById('edit-sheet').addEventListener('click',e=>{if(e.target.id==='edit-sheet')closeEditSheet();});
 function saveEdit(){
+  if(editingId&&isTxLocked(editingId)){showToast('🔒 ロック中のため保存できません');return;}
   const amtEl=document.getElementById('edit-amount');
   const rawExpr=amtEl.value;
   let amount=evalAmountExpr(rawExpr);
