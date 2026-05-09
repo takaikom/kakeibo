@@ -4829,13 +4829,9 @@ function showAmountCalcHint(el,hintId){
 // ════════════════════════════════════════
 (function setupNumpad(){
 
-  // タッチデバイス判定:
-  // pointer:coarseでの判定を基本とするが、PWA(Add to Home Screen)では
-  // standalone modeでもpointerが'fine'と誤判定される端末があるため
-  // ontouchstartの有無をフォールバックとして使用する
-  const isTouch = window.matchMedia('(pointer: coarse)').matches
-    || ('ontouchstart' in window)
-    || (navigator.maxTouchPoints > 0);
+  // タッチデバイス判定: pointer:coarse = スマホ/タブレット, pointer:fine = マウス(PC)
+  const isTouch = window.matchMedia('(pointer: coarse)').matches;
+
 
   const entryEl = document.getElementById('entry-amount');
   const editEl  = document.getElementById('edit-amount');
