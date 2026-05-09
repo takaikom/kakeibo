@@ -1,4 +1,4 @@
-const CACHE_NAME = 'kakeibo-v2';
+const CACHE_NAME = 'kakeibo-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -27,7 +27,7 @@ self.addEventListener('activate', event => {
   );
 });
 
-// フェッチ時：キャッシュ優先、なければネット
+// フェッチ時：Network First（ネット優先・失敗時のみキャッシュ）
 self.addEventListener('fetch', event => {
   // GAS（API通信）はキャッシュしない
   if (event.request.url.includes('script.google.com')) return;
@@ -36,22 +36,24 @@ self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
 
   event.respondWith(
-    caches.match(event.request).then(cached => {
-      if (cached) return cached;
-      return fetch(event.request).then(response => {
+    fetch(event.request)
+      .then(response => {
         // 有効なレスポンスのみキャッシュに追加
-        if (!response || response.status !== 200 || response.type === 'opaque') {
-          return response;
+        if (response && response.status === 200 && response.type !== 'opaque') {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
         }
-        const clone = response.clone();
-        caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
         return response;
-      }).catch(() => {
-        // オフライン時はindex.htmlを返す（ナビゲーションリクエストのみ）
-        if (event.request.mode === 'navigate') {
-          return caches.match('./index.html');
-        }
-      });
-    })
+      })
+      .catch(() => {
+        // ネット失敗時のみキャッシュにフォールバック
+        return caches.match(event.request).then(cached => {
+          if (cached) return cached;
+          // ナビゲーションリクエストはindex.htmlを返す
+          if (event.request.mode === 'navigate') {
+            return caches.match('./index.html');
+          }
+        });
+      })
   );
 });
