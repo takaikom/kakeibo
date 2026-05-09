@@ -1361,26 +1361,23 @@ async function syncFromRemote(silent=false){
       const mergedTxs=[...(lu.transactions||[])];
       (ru.transactions||[]).forEach(rt=>{
         if(!localTxMap.has(String(rt.id))){
-          // ローカルにないIDはそのまま追加（異なるデバイスで登録した取引）
+          // ローカルにないIDは無条件で追加（別デバイスで登録した取引）
           mergedTxs.push(rt);
           return;
         }
         const lt=localTxMap.get(String(rt.id));
-        {
-          const lt=localTxMap.get(rt.id);
-          // 完全一致チェック（主要フィールドすべて同じなら衝突なし）
-          const isExactMatch=(
-            lt.amount===rt.amount &&
-            lt.date===rt.date &&
-            lt.category===rt.category &&
-            (lt.desc||'')===(rt.desc||'') &&
-            (lt.memo||'')===(rt.memo||'') &&
-            lt.type===rt.type &&
-            (lt.account||'')===(rt.account||'')
-          );
-          if(!isExactMatch){
-            if(!conflictMap[rt.id])conflictMap[rt.id]={local:lt,remote:rt,user:lu};
-          }
+        // 完全一致チェック（主要フィールドすべて同じなら衝突なし）
+        const isExactMatch=(
+          lt.amount===rt.amount &&
+          lt.date===rt.date &&
+          lt.category===rt.category &&
+          (lt.desc||'')===(rt.desc||'') &&
+          (lt.memo||'')===(rt.memo||'') &&
+          lt.type===rt.type &&
+          (lt.account||'')===(rt.account||'')
+        );
+        if(!isExactMatch){
+          if(!conflictMap[String(rt.id)])conflictMap[String(rt.id)]={local:lt,remote:rt,user:lu};
         }
       });
       mergedTxs.sort((a,b)=>a.date.localeCompare(b.date)||String(a.id).localeCompare(String(b.id)));
@@ -2674,10 +2671,7 @@ function renderTrashSection(){
 // スワイプ削除（スマホ）セットアップ
 // ────────────────────────────────────────
 const isPointerCoarse=window.matchMedia('(pointer:coarse)').matches
-  ||('ontouchstart' in window)||(navigator.maxTouchPoints>0)
-  ||/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
-  ||window.matchMedia('(display-mode: standalone)').matches
-  ||(window.navigator.standalone===true);
+  ||('ontouchstart' in window)||(navigator.maxTouchPoints>0);
 
 function wrapTxCardWithSwipe(cardEl){
   if(!isPointerCoarse)return cardEl;
@@ -3764,12 +3758,11 @@ function openEdit(id){
     updateDeferredUI('edit', editType);
   }
   document.getElementById('edit-sheet').classList.add('open');
-  if(isPointerCoarse){
-    setTimeout(()=>{
-      const ep=document.getElementById('edit-numpad');
-      if(ep)ep.classList.add('open');
-    },80);
-  }
+  // テンキーを常に開く（デバイス判定に依存しない）
+  setTimeout(()=>{
+    const ep=document.getElementById('edit-numpad');
+    if(ep)ep.classList.add('open');
+  },80);
 }
 function setEditType(type){
   editType=type;
@@ -4827,44 +4820,62 @@ function showAmountCalcHint(el,hintId){
 // ════════════════════════════════════════
 (function setupNumpad(){
 
-  // タッチデバイス判定:
-  // pointer:coarseを基本とするが、APK(WebView)やPWA(standalone)では
-  // pointer:'fine'と誤判定される端末があるため複数の方法で判定する
-  const _isCoarse   = window.matchMedia('(pointer: coarse)').matches;
-  const _hasTouch   = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-  const _isMobileUA = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-  const _isStandalone = window.matchMedia('(display-mode: standalone)').matches
-                     || (window.navigator.standalone === true);
-  const isTouch = _isCoarse || _hasTouch || _isMobileUA || _isStandalone;
+  // デバイス判定は行わず、テンキーを常に有効にする。
+  // PCではキーボード入力も同時に受け付け、両立させる。
+  // （WebView/APK/PWAでpointer判定が信頼できないため）
 
   const entryEl = document.getElementById('entry-amount');
   const editEl  = document.getElementById('edit-amount');
 
-  if(!isTouch){
-    // ── PC：テンキー非表示・inputmodeをdecimalに戻して通常キーボード入力 ──
-    entryEl.setAttribute('inputmode','decimal');
-    editEl.setAttribute('inputmode','decimal');
-    // inputイベントでリアルタイムヒント更新
-    function onPcInput(el, hintId){
-      // 全角→半角正規化
-      const before=el.value;
-      const after=before
+  // ── PCキーボード入力サポート（inputmodeはnoneのまま、keydownで処理）──
+  function onKeyInput(e, el, hintId){
+    // 通常のキー入力を手動で処理
+    const allowed = '0123456789.+-*/';
+    if(e.key === 'Backspace'){
+      e.preventDefault();
+      el.value = el.value.slice(0, -1);
+    } else if(e.key === 'Delete'){
+      e.preventDefault();
+      el.value = '';
+    } else if(e.key === 'Enter'){
+      e.preventDefault();
+      if(el.id==='entry-amount'){
+        document.getElementById('entry-numpad').classList.remove('open');
+        updateTaxPreview(); submitEntry();
+      } else {
+        document.getElementById('edit-numpad').classList.remove('open');
+        updateEditTaxPreview();
+      }
+      return;
+    } else if(e.key.length === 1){
+      // 全角→半角変換
+      let k = e.key
         .replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xFEE0))
         .replace(/[＋]/g,'+').replace(/[－−]/g,'-')
         .replace(/[×＊]/g,'*').replace(/[÷／]/g,'/')
         .replace(/[。．]/g,'.');
-      if(after!==before){const p=el.selectionStart;el.value=after;try{el.setSelectionRange(p,p);}catch(e){}}
-      showAmountCalcHint(el, hintId);
-      if(el.id==='entry-amount') updateTaxPreview();
+      if(allowed.includes(k)){
+        e.preventDefault();
+        const ops=['+','-','*','/'];
+        if(ops.includes(k)&&el.value.length>0&&ops.includes(el.value.slice(-1))){
+          el.value=el.value.slice(0,-1)+k;
+        } else {
+          el.value+=k;
+        }
+      } else {
+        return; // 不明なキーは無視（ブラウザデフォルト動作を許可しない）
+      }
+    } else {
+      return;
     }
-    entryEl.addEventListener('input', function(){ onPcInput(this,'entry-amount-hint'); });
-    editEl.addEventListener('input',  function(){ onPcInput(this,'edit-amount-hint'); updateEditTaxPreview(); });
-    return; // テンキー関連の処理はここで終了
+    showAmountCalcHint(el, hintId);
+    if(el.id==='entry-amount') updateTaxPreview();
+    if(el.id==='edit-amount') updateEditTaxPreview();
   }
+  entryEl.addEventListener('keydown', function(e){ onKeyInput(e, this, 'entry-amount-hint'); });
+  editEl.addEventListener('keydown',  function(e){ onKeyInput(e, this, 'edit-amount-hint'); });
 
-  // ── スマホ：テンキーを使用 ──
-
-  // フォーカス時にテンキーを開く
+  // ── フォーカス時にテンキーを開く（スマホ・PC共通）──
   entryEl.addEventListener('focus', ()=>document.getElementById('entry-numpad').classList.add('open'));
   editEl.addEventListener('focus',  ()=>document.getElementById('edit-numpad').classList.add('open'));
 
