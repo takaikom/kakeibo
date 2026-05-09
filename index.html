@@ -1358,16 +1358,11 @@ async function syncFromRemote(silent=false){
       if(!ru.transactions)ru.transactions=[];
       // 取引はローカルとリモートをマージしてID衝突を検出
       const localTxMap=new Map((lu.transactions||[]).map(t=>[String(t.id),t]));
-      // 内容キーマップ（日付変更後の旧IDデータ復活防止用）
-      const localContentSet=new Set((lu.transactions||[]).map(t=>
-        [t.date,t.type,t.amount,t.category,t.desc||'',t.memo||'',t.account||''].join('|')
-      ));
       const mergedTxs=[...(lu.transactions||[])];
       (ru.transactions||[]).forEach(rt=>{
         if(!localTxMap.has(String(rt.id))){
-          // ローカルにないID → 内容も同一のものがあれば旧IDの残骸なので追加しない
-          const ck=[rt.date,rt.type,rt.amount,rt.category,rt.desc||'',rt.memo||'',rt.account||''].join('|');
-          if(!localContentSet.has(ck))mergedTxs.push(rt);
+          // ローカルにないIDはそのまま追加（異なるデバイスで登録した取引）
+          mergedTxs.push(rt);
           return;
         }
         const lt=localTxMap.get(String(rt.id));
@@ -2679,7 +2674,10 @@ function renderTrashSection(){
 // スワイプ削除（スマホ）セットアップ
 // ────────────────────────────────────────
 const isPointerCoarse=window.matchMedia('(pointer:coarse)').matches
-  ||('ontouchstart' in window)||(navigator.maxTouchPoints>0);
+  ||('ontouchstart' in window)||(navigator.maxTouchPoints>0)
+  ||/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+  ||window.matchMedia('(display-mode: standalone)').matches
+  ||(window.navigator.standalone===true);
 
 function wrapTxCardWithSwipe(cardEl){
   if(!isPointerCoarse)return cardEl;
@@ -3766,7 +3764,7 @@ function openEdit(id){
     updateDeferredUI('edit', editType);
   }
   document.getElementById('edit-sheet').classList.add('open');
-  if(window.matchMedia('(pointer: coarse)').matches){
+  if(isPointerCoarse){
     setTimeout(()=>{
       const ep=document.getElementById('edit-numpad');
       if(ep)ep.classList.add('open');
@@ -4829,9 +4827,15 @@ function showAmountCalcHint(el,hintId){
 // ════════════════════════════════════════
 (function setupNumpad(){
 
-  // タッチデバイス判定: pointer:coarse = スマホ/タブレット, pointer:fine = マウス(PC)
-  const isTouch = window.matchMedia('(pointer: coarse)').matches;
-
+  // タッチデバイス判定:
+  // pointer:coarseを基本とするが、APK(WebView)やPWA(standalone)では
+  // pointer:'fine'と誤判定される端末があるため複数の方法で判定する
+  const _isCoarse   = window.matchMedia('(pointer: coarse)').matches;
+  const _hasTouch   = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+  const _isMobileUA = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  const _isStandalone = window.matchMedia('(display-mode: standalone)').matches
+                     || (window.navigator.standalone === true);
+  const isTouch = _isCoarse || _hasTouch || _isMobileUA || _isStandalone;
 
   const entryEl = document.getElementById('entry-amount');
   const editEl  = document.getElementById('edit-amount');
