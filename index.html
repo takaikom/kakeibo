@@ -2745,9 +2745,17 @@ function applySwipeWraps(el){
   if(!isPointerCoarse)return;
   el.querySelectorAll('.tx-card[data-id]').forEach(card=>{
     if(card.parentElement&&card.parentElement.classList.contains('tx-swipe-wrap'))return;
+    const originalParent=card.parentElement;
+    const originalNext=card.nextSibling;
     const wrap=wrapTxCardWithSwipe(card);
-    if(wrap!==card){
-      card.parentElement.insertBefore(wrap,card);
+    if(wrap!==card&&originalParent){
+      // wrapTxCardWithSwipe 内で card が wrap に移動済みなので
+      // originalParent の元の位置に wrap を挿入する
+      if(originalNext){
+        originalParent.insertBefore(wrap,originalNext);
+      }else{
+        originalParent.appendChild(wrap);
+      }
     }
   });
 }
@@ -4975,30 +4983,33 @@ document.getElementById('parent-mode-toggle').addEventListener('change', (e) => 
 });
 </script>
 <script>
-  // Service Worker: file://プロトコル(APKローカル)では登録しない
-  // 既存の古いSWが404を引き起こすため、まず全解除してから再登録する
+  // Service Worker とキャッシュの管理
+  // index.html の更新をSWキャッシュが隠す問題を防ぐため、
+  // ページロード時にまず全キャッシュを削除してから SW を再登録する。
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-    window.addEventListener('load', () => {
-      // 古いService Workerを全て解除してから新規登録
-      navigator.serviceWorker.getRegistrations().then(regs => {
-        const stale = regs.filter(r => !r.active || !r.active.scriptURL.endsWith('sw.js'));
-        return Promise.all(stale.map(r => r.unregister()));
-      }).then(() => {
-        return navigator.serviceWorker.register('./sw.js');
-      }).then(reg => console.log('SW registered:', reg.scope))
-        .catch(err => {
-          // sw.jsが存在しない場合は全SWを解除してエラーを握り潰す
-          console.log('SW register failed, unregistering all:', err);
-          navigator.serviceWorker.getRegistrations().then(regs =>
-            Promise.all(regs.map(r => r.unregister()))
-          );
-        });
+    window.addEventListener('load', async () => {
+      try {
+        // 全キャッシュを削除（古い index.html キャッシュを確実に消す）
+        const cacheKeys = await caches.keys();
+        await Promise.all(cacheKeys.map(k => caches.delete(k)));
+        // SW を登録（すでに登録済みでも update() で最新化）
+        const reg = await navigator.serviceWorker.register('./sw.js');
+        await reg.update();
+        console.log('SW registered and updated:', reg.scope);
+      } catch(err) {
+        console.log('SW setup failed:', err);
+        // SW登録失敗時は全SWを解除
+        try {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(regs.map(r => r.unregister()));
+        } catch(e){}
+      }
     });
   } else if ('serviceWorker' in navigator && location.protocol === 'file:') {
-    // file://の場合: 既存SWが残っていると404の原因になるので全解除
-    navigator.serviceWorker.getRegistrations().then(regs =>
-      Promise.all(regs.map(r => r.unregister()))
-    );
+    // file://の場合: SWは使えないので既存の登録を全解除
+    navigator.serviceWorker.getRegistrations()
+      .then(regs => Promise.all(regs.map(r => r.unregister())))
+      .catch(()=>{});
   }
 </script>
 </body>
