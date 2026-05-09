@@ -1365,20 +1365,9 @@ async function syncFromRemote(silent=false){
       // 取引はローカルとリモートをマージしてID衝突を検出
       const localTxMap=new Map((lu.transactions||[]).map(t=>[String(t.id),t]));
       // ローカル取引を「内容キー」→取引 のマップも作成（旧ID復活防止用）
-      const localTxContentMap=new Map();
-      (lu.transactions||[]).forEach(t=>{
-        const key=[t.date,t.type,t.amount,t.category,t.desc||'',t.memo||'',t.account||''].join('|');
-        localTxContentMap.set(key,t);
-      });
       const mergedTxs=[...(lu.transactions||[])];
       (ru.transactions||[]).forEach(rt=>{
         if(!localTxMap.has(String(rt.id))){
-          // IDがローカルにない → 内容も同じものがないか確認（旧IDデータの復活防止）
-          const contentKey=[rt.date,rt.type,rt.amount,rt.category,rt.desc||'',rt.memo||'',rt.account||''].join('|');
-          if(localTxContentMap.has(contentKey)){
-            // ローカルに同一内容の取引が既にある（IDだけ変わった）→ 追加しない
-            return;
-          }
           mergedTxs.push(rt);
         }else{
           const lt=localTxMap.get(String(rt.id));
