@@ -858,6 +858,10 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
         <div class="menu-icon" style="background:var(--purple-light);">📂</div>
         <div><div>削除したグループ <span id="menu-deleted-groups-badge" style="display:none;background:var(--purple);color:white;border-radius:99px;font-size:11px;padding:1px 7px;margin-left:4px;"></span></div><div class="menu-item-desc">一時削除したグループを復元</div></div>
       </button>
+      <button class="menu-item" id="menu-purge-habit-btn">
+        <div class="menu-icon" style="background:var(--teal-light);">🧹</div>
+        <div><div>habit混入データを完全削除</div><div class="menu-item-desc">別URLから入り込んだ習慣データをローカル＆GASから除去</div></div>
+      </button>
       <hr class="sheet-divider">
       <!-- データ操作 -->
       <button class="menu-item" id="menu-export-btn">
@@ -1197,22 +1201,26 @@ async function saveData(){
     let baseUsers;
     if(remote&&remote.users){
       // 手動↑（gasUploadMerge）と同じく、明細のみ上書き・設定はサーバー側を保持
+      // ※ トランザクションはローカルで完全置換（旧IDが残らないよう）
+      // ※ habitフィールドは送信しない
       baseUsers=remote.users.map(ru=>{
         if(ru.id===curUser.id){
-          return{...ru, transactions:curUser.transactions||[]};
+          return stripHabitFields({...ru, transactions:curUser.transactions||[]});
         }
-        return ru; // 他メンバーはサーバー側をそのまま維持
+        return stripHabitFields(ru); // 他メンバーはサーバー側をそのまま維持（habitのみ除去）
       });
-      if(!baseUsers.find(u=>u.id===curUser.id))baseUsers.push({...curUser});
+      if(!baseUsers.find(u=>u.id===curUser.id))baseUsers.push(stripHabitFields({...curUser}));
     }else{
-      baseUsers=[{...curUser}];
+      baseUsers=[stripHabitFields({...curUser})];
     }
     const remoteDeleted=remote&&remote.deletedUsers?remote.deletedUsers:[];
     const localDeleted=local.deletedUsers||[];
     const mergedDeleted=[...remoteDeleted];
     localDeleted.forEach(lu=>{if(!mergedDeleted.find(u=>u.id===lu.id))mergedDeleted.push(lu);});
-    const filteredUsers=baseUsers.filter(u=>!mergedDeleted.find(d=>d.id===u.id));
-    const payload={users:filteredUsers,deletedUsers:mergedDeleted,groupName:cg?cg.name:(remote&&remote.groupName?remote.groupName:'')};
+    // deletedUsersもhabitフィールドを除去
+    const cleanMergedDeleted=mergedDeleted.map(u=>stripHabitFields(u));
+    const filteredUsers=baseUsers.filter(u=>!cleanMergedDeleted.find(d=>d.id===u.id));
+    const payload={users:filteredUsers,deletedUsers:cleanMergedDeleted,groupName:cg?cg.name:(remote&&remote.groupName?remote.groupName:'')};
     const ok=await remoteSave(payload);
     if(ok){
       const now=new Date().toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
@@ -1221,6 +1229,37 @@ async function saveData(){
   }else{
     setSyncDot(getGroupGasUrl()?'ok':'off');
   }
+}
+
+// ════════════════════════════════════════
+// habitフィールド除去ヘルパー
+// GASから持ち込まれた habits / archive / deletedHabitKeys フィールドを
+// ユーザーオブジェクトから取り除く（このアプリでは管理しないデータ）
+// ════════════════════════════════════════
+const HABIT_FIELDS=['habits','archive','deletedHabitKeys'];
+function stripHabitFields(user){
+  if(!user)return user;
+  const u={...user};
+  HABIT_FIELDS.forEach(k=>delete u[k]);
+  return u;
+}
+
+// ローカルストレージ内の全ユーザーからhabitフィールドを除去して保存
+function purgeHabitFieldsLocal(){
+  const d=loadGroupData();
+  let changed=false;
+  d.users=d.users.map(u=>{
+    const hasHabit=HABIT_FIELDS.some(k=>k in u);
+    if(hasHabit){changed=true;return stripHabitFields(u);}
+    return u;
+  });
+  d.deletedUsers=(d.deletedUsers||[]).map(u=>{
+    const hasHabit=HABIT_FIELDS.some(k=>k in u);
+    if(hasHabit){changed=true;return stripHabitFields(u);}
+    return u;
+  });
+  if(changed){saveGroupData(d);console.log('[purge] habitフィールドをローカルから除去しました');}
+  return changed;
 }
 
 // ── IDシステム: YYYYMMDD-NN形式（文字列） ──
@@ -1314,6 +1353,8 @@ async function syncFromRemote(silent=false){
   // リモートのusers一覧を基準にする
   const newUsers=[];
   (remote.users||[]).forEach(ru=>{
+    // habitフィールドを受信データから除去
+    ru=stripHabitFields(ru);
     if(merged.deletedUsers.find(u=>u.id===ru.id))return;
     if(ru.id===curUid){
       // 開いているユーザーのみ完全同期：取引・設定すべてリモートで受信
@@ -1322,13 +1363,25 @@ async function syncFromRemote(silent=false){
       if(!ru.incomeCats) ru.incomeCats =(ru.isChild?CHILD_INCOME_CATS :DEFAULT_INCOME_CATS).slice();
       if(!ru.transactions)ru.transactions=[];
       // 取引はローカルとリモートをマージしてID衝突を検出
-      const localTxMap=new Map((lu.transactions||[]).map(t=>[t.id,t]));
+      const localTxMap=new Map((lu.transactions||[]).map(t=>[String(t.id),t]));
+      // ローカル取引を「内容キー」→取引 のマップも作成（旧ID復活防止用）
+      const localTxContentMap=new Map();
+      (lu.transactions||[]).forEach(t=>{
+        const key=[t.date,t.type,t.amount,t.category,t.desc||'',t.memo||'',t.account||''].join('|');
+        localTxContentMap.set(key,t);
+      });
       const mergedTxs=[...(lu.transactions||[])];
       (ru.transactions||[]).forEach(rt=>{
-        if(!localTxMap.has(rt.id)){
+        if(!localTxMap.has(String(rt.id))){
+          // IDがローカルにない → 内容も同じものがないか確認（旧IDデータの復活防止）
+          const contentKey=[rt.date,rt.type,rt.amount,rt.category,rt.desc||'',rt.memo||'',rt.account||''].join('|');
+          if(localTxContentMap.has(contentKey)){
+            // ローカルに同一内容の取引が既にある（IDだけ変わった）→ 追加しない
+            return;
+          }
           mergedTxs.push(rt);
         }else{
-          const lt=localTxMap.get(rt.id);
+          const lt=localTxMap.get(String(rt.id));
           // 完全一致チェック（主要フィールドすべて同じなら衝突なし）
           const isExactMatch=(
             lt.amount===rt.amount &&
@@ -1357,9 +1410,11 @@ async function syncFromRemote(silent=false){
       if(ru.defaultTaxRate!=null)syncedUser.defaultTaxRate=ru.defaultTaxRate;
       if(ru.isChild!=null)syncedUser.isChild=ru.isChild;
       if(ru.name)syncedUser.name=ru.name;
+      // habitフィールドが混入していた場合は除去
+      HABIT_FIELDS.forEach(k=>delete syncedUser[k]);
       newUsers.push(syncedUser);
     }else{
-      // 他のユーザー：リモートデータをそのまま使用（ローカルの変更は反映しない）
+      // 他のユーザー：リモートデータをそのまま使用（habitフィールドは除去）
       if(!ru.expenseCats)ru.expenseCats=(ru.isChild?CHILD_EXPENSE_CATS:DEFAULT_EXPENSE_CATS).slice();
       if(!ru.incomeCats) ru.incomeCats =(ru.isChild?CHILD_INCOME_CATS :DEFAULT_INCOME_CATS).slice();
       if(!ru.transactions)ru.transactions=[];
@@ -3969,35 +4024,37 @@ async function gasUploadMerge(){
   const myUser=local.users.find(u=>u.id===curUid)||local.users[0];
 
   // 2. サーバーデータをベースに、開いているユーザーの取引のみ上書き
+  // ※ habitフィールドは送信しない
   let baseUsers;
   if(remote&&remote.users){
     baseUsers=remote.users.map(ru=>{
       if(ru.id===myUser.id){
-        // 取引データのみ上書き。設定はサーバー側を保持
-        return{...ru, transactions:myUser.transactions||[]};
+        // 取引データのみ上書き。設定はサーバー側を保持。habitは除去
+        return stripHabitFields({...ru, transactions:myUser.transactions||[]});
       }
-      return ru; // 他メンバーはサーバー側をそのまま維持
+      return stripHabitFields(ru); // 他メンバーはサーバー側をそのまま維持（habitのみ除去）
     });
     // サーバーにいないが自分のデバイスにいるメンバーは追加（新規追加メンバー）
     local.users.forEach(lu=>{
       if(!baseUsers.find(u=>u.id===lu.id)){
-        baseUsers.push(lu);
+        baseUsers.push(stripHabitFields(lu));
       }
     });
   }else{
-    baseUsers=local.users;
+    baseUsers=local.users.map(u=>stripHabitFields(u));
   }
 
-  // 3. deletedUsersをマージ
+  // 3. deletedUsersをマージ（habitフィールドも除去）
   const remoteDeleted=remote&&remote.deletedUsers?remote.deletedUsers:[];
   const localDeleted=local.deletedUsers||[];
   const mergedDeleted=[...remoteDeleted];
   localDeleted.forEach(lu=>{if(!mergedDeleted.find(u=>u.id===lu.id))mergedDeleted.push(lu);});
-  const filteredUsers=baseUsers.filter(u=>!mergedDeleted.find(d=>d.id===u.id));
+  const cleanMergedDeleted=mergedDeleted.map(u=>stripHabitFields(u));
+  const filteredUsers=baseUsers.filter(u=>!cleanMergedDeleted.find(d=>d.id===u.id));
 
   const payload={
     users:filteredUsers,
-    deletedUsers:mergedDeleted,
+    deletedUsers:cleanMergedDeleted,
     groupName:cg?cg.name:(remote&&remote.groupName?remote.groupName:'')
   };
 
@@ -4055,16 +4112,16 @@ function gasShowFullOverwriteDialog(){
     let baseUsers;
     if(remote&&remote.users){
       baseUsers=remote.users.map(ru=>{
-        if(ru.id===myUser.id){return{...myUser};}
-        return ru;
+        if(ru.id===myUser.id){return stripHabitFields({...myUser});}
+        return stripHabitFields(ru);
       });
-      if(!baseUsers.find(u=>u.id===myUser.id))baseUsers.push({...myUser});
+      if(!baseUsers.find(u=>u.id===myUser.id))baseUsers.push(stripHabitFields({...myUser}));
     }else{
-      baseUsers=[{...myUser}];
+      baseUsers=[stripHabitFields({...myUser})];
     }
 
     const localDeleted=local.deletedUsers||[];
-    const mergedDeleted=localDeleted.slice();
+    const mergedDeleted=localDeleted.map(u=>stripHabitFields(u));
     const filteredUsers=baseUsers.filter(u=>!mergedDeleted.find(d=>d.id===u.id));
 
     const payload={
@@ -4126,10 +4183,16 @@ async function gasDownloadOverwrite(){
   const remote=await remoteLoad();
   if(!remote){setSyncDot('err');showToast('⚠ 同期に失敗しました');return;}
   // ローカルをGASデータで完全置換（グループ設定は保持）
+  // GASデータからhabitフィールドを除去
+  const cleanedRemote={
+    ...remote,
+    users:(remote.users||[]).map(u=>stripHabitFields(u)),
+    deletedUsers:(remote.deletedUsers||[]).map(u=>stripHabitFields(u))
+  };
   const local=loadGroupData();
   const merged={
-    ...remote,
-    deletedUsers: remote.deletedUsers||local.deletedUsers||[]
+    ...cleanedRemote,
+    deletedUsers: cleanedRemote.deletedUsers||local.deletedUsers||[]
   };
   saveGroupData(merged);
   // IDと日付の不整合を自動修復（日付変更後に旧IDが残っている場合など）
@@ -4320,6 +4383,49 @@ document.getElementById('menu-deleted-groups-btn').addEventListener('click',()=>
 
   renderDeletedGroupList();
   ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
+});
+
+// habit混入データ完全削除
+document.getElementById('menu-purge-habit-btn').addEventListener('click',()=>{
+  closeMenu();
+  // ローカルにhabitフィールドがあるか確認
+  const d=loadGroupData();
+  const localHabitCount=[...d.users,...(d.deletedUsers||[])].filter(u=>HABIT_FIELDS.some(k=>k in u)).length;
+  const hasGasUrl=!!getGroupGasUrl();
+
+  const ov=document.createElement('div');
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:300;display:flex;align-items:flex-end;justify-content:center;';
+  ov.innerHTML=`<div style="background:var(--surface);border-radius:20px 20px 0 0;padding:24px 20px calc(24px + env(safe-area-inset-bottom));width:100%;max-width:480px;animation:slideUp .22s cubic-bezier(.22,1,.36,1);">
+    <div style="font-size:15px;font-weight:700;margin-bottom:8px;">🧹 habit混入データを完全削除</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:12px;">別のGAS URLから同期された習慣管理データ（habits・archive・deletedHabitKeys）をこのアプリから除去します。取引データには影響しません。</div>
+    <div style="background:var(--surface2);border-radius:10px;padding:10px 12px;font-size:12px;margin-bottom:12px;">
+      <div>📱 ローカルのhabitフィールドを持つユーザー：<b>${localHabitCount}件</b></div>
+      ${hasGasUrl?`<div style="margin-top:4px;">☁️ GASにも同データが残っている場合は「GASにも反映」を選ぶと除去します</div>`:'<div style="margin-top:4px;color:var(--text3);">（GAS未設定）</div>'}
+    </div>
+    <button id="_hpb-local" style="width:100%;height:44px;border-radius:12px;border:none;background:var(--teal-light);color:var(--teal);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:8px;">📱 ローカルのみ削除</button>
+    ${hasGasUrl?`<button id="_hpb-gas" style="width:100%;height:44px;border-radius:12px;border:none;background:var(--blue-light);color:var(--blue);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:8px;">☁️ ローカル＋GASに反映（送信あり）</button>`:''}
+    <button id="_hpb-cancel" style="width:100%;height:40px;border-radius:12px;border:none;background:var(--surface2);color:var(--text2);font-family:inherit;font-size:14px;cursor:pointer;">キャンセル</button>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.addEventListener('click',e=>{if(e.target===ov)ov.remove();});
+  ov.querySelector('#_hpb-cancel').addEventListener('click',()=>ov.remove());
+  ov.querySelector('#_hpb-local').addEventListener('click',()=>{
+    ov.remove();
+    const changed=purgeHabitFieldsLocal();
+    showToast(changed?'🧹 ローカルのhabitデータを除去しました':'ℹ️ 除去対象のhabitデータはありませんでした');
+    renderAll();
+  });
+  const gasBtn=ov.querySelector('#_hpb-gas');
+  if(gasBtn){
+    gasBtn.addEventListener('click',async()=>{
+      ov.remove();
+      purgeHabitFieldsLocal();
+      // GASにも反映：現在のローカルデータ（habit除去済み）でアップロード
+      await gasUploadMerge();
+      showToast('🧹 ローカル＆GASのhabitデータを除去しました');
+      renderAll();
+    });
+  }
 });
 
 // ユーザー名変更
@@ -4656,6 +4762,8 @@ ensureDefaultGroup();
   migrateAllTxIds();
   // IDと日付の不整合を修復（日付変更後に旧IDが残っているデータを修正）
   repairTxIdDateMismatch();
+  // 別GAS URLから混入したhabitフィールドをローカルから除去
+  purgeHabitFieldsLocal();
   const pinned=getPinnedUserId();
   const d=loadGroupData();
 
