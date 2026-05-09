@@ -1394,10 +1394,57 @@ async function syncFromRemote(silent=false){
     await handleIdConflicts(conflicts);
   }
 
+  // IDと日付の不整合を自動修復
+  repairTxIdDateMismatch();
+
   if(!silent){setSyncDot('ok');showToast('✅ 受信しました');}
   else setSyncDot('ok');
   renderAll();
   return true;
+}
+
+// ════════════════════════════════════════
+// IDと日付の不整合を自動修復
+// 日付変更後に旧日付IDが残っている取引を検出し、新しい日付のIDに振り直す
+// ════════════════════════════════════════
+function repairTxIdDateMismatch(){
+  const d=loadGroupData();
+  let changed=false;
+  d.users.forEach(u=>{
+    if(!u.transactions||!u.transactions.length)return;
+    // 日付とIDのプレフィックスが一致しない取引を検出
+    const mismatched=u.transactions.filter(t=>{
+      const idDate=(String(t.id)||'').slice(0,8);
+      const txDateKey=(t.date||'').replace(/-/g,'');
+      return idDate&&txDateKey&&idDate!==txDateKey;
+    });
+    if(!mismatched.length)return;
+    // 日付ごとの既存最大連番を把握（正常なIDのみ対象）
+    const dateSeqMax={};
+    u.transactions.forEach(t=>{
+      if(mismatched.includes(t))return; // 不整合のものは除外
+      const idDate=(String(t.id)||'').slice(0,8);
+      const seq=parseInt((String(t.id)||'').split('-')[1]||'0');
+      if(idDate&&!isNaN(seq)){
+        if(!dateSeqMax[idDate]||seq>dateSeqMax[idDate])dateSeqMax[idDate]=seq;
+      }
+    });
+    // 不整合の取引に新IDを割り当て
+    mismatched.forEach(t=>{
+      const newDateKey=(t.date||'').replace(/-/g,'');
+      if(!newDateKey)return;
+      const maxSeq=dateSeqMax[newDateKey]||0;
+      dateSeqMax[newDateKey]=maxSeq+1;
+      const newId=newDateKey+'-'+String(maxSeq+1).padStart(2,'0');
+      const idx=u.transactions.indexOf(t);
+      if(idx>=0){u.transactions[idx]={...t,id:newId};changed=true;}
+    });
+  });
+  if(changed){
+    saveGroupData(d);
+    console.log('[repair] IDと日付の不整合を修復しました');
+  }
+  return changed;
 }
 
 async function handleIdConflicts(conflicts){
@@ -3770,11 +3817,11 @@ function saveEdit(){
   const editObligationDate=editIsDeferred?(document.getElementById('edit-obligation-date').value||''):'';
   const editPaymentDate=editIsDeferred?(document.getElementById('edit-payment-date').value||''):'';
   const editDeferredType=editIsDeferred?getDeferredTypeName(editType):'';
-  const taxFields=isTaxExcl?{taxExcl:amountExcl,taxRate}:{taxExcl:undefined,taxRate:undefined};
   mutateUser(u=>{
     const i=u.transactions.findIndex(t=>String(t.id)===String(editingId));
     if(i>=0){
-      const base={...u.transactions[i],type:editType,amount,category:cat,date,desc,memo,account,expr:rawExpr};
+      const oldTx=u.transactions[i];
+      const base={...oldTx,type:editType,amount,category:cat,date,desc,memo,account,expr:rawExpr};
       if(isTaxExcl){base.taxExcl=amountExcl;base.taxRate=taxRate;}
       else{delete base.taxExcl;delete base.taxRate;}
       if(editIsDeferred){
@@ -3783,6 +3830,24 @@ function saveEdit(){
         base.paymentDate=editPaymentDate;
       }else{
         delete base.deferredType;delete base.obligationDate;delete base.paymentDate;
+      }
+      // 日付が変わった場合はIDを新しい日付で振り直す
+      const oldDateInId=(String(oldTx.id)||'').slice(0,8); // YYYYMMDD部分
+      const newDateKey=date.replace(/-/g,'');
+      if(oldDateInId&&oldDateInId!==newDateKey){
+        // 新しい日付での既存IDを除外して採番（自分自身は除く）
+        const otherTxs=u.transactions.filter((_,idx)=>idx!==i);
+        const prefix=newDateKey+'-';
+        const sameDaySeqs=otherTxs
+          .filter(t=>t.id&&String(t.id).startsWith(prefix))
+          .map(t=>{const p=String(t.id).split('-');return parseInt(p[1]||'0');})
+          .filter(n=>!isNaN(n));
+        const maxSeq=sameDaySeqs.length?Math.max(...sameDaySeqs):0;
+        base.id=newDateKey+'-'+String(maxSeq+1).padStart(2,'0');
+        // ロックも旧IDから新IDに移行
+        const ls=loadLockedTxs();
+        if(ls.has(String(oldTx.id))){ls.delete(String(oldTx.id));ls.add(String(base.id));saveLockedTxs(ls);}
+        editingId=base.id; // ロックボタン用に更新
       }
       u.transactions[i]=base;
     }
@@ -4067,6 +4132,8 @@ async function gasDownloadOverwrite(){
     deletedUsers: remote.deletedUsers||local.deletedUsers||[]
   };
   saveGroupData(merged);
+  // IDと日付の不整合を自動修復（日付変更後に旧IDが残っている場合など）
+  repairTxIdDateMismatch();
   if(remote.groupName){
     const gs=loadGroups();const id=getCurrentGroupId();
     const g=gs.find(g=>g.id===id);
@@ -4587,6 +4654,8 @@ ensureDefaultGroup();
   }
   // 既存IDをYYYYMMDD-NN形式に正規化（旧形式のIDを持つデータを移行）
   migrateAllTxIds();
+  // IDと日付の不整合を修復（日付変更後に旧IDが残っているデータを修正）
+  repairTxIdDateMismatch();
   const pinned=getPinnedUserId();
   const d=loadGroupData();
 
