@@ -596,7 +596,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
       </label>
       <span class="tax-preview" id="entry-tax-preview"></span>
     </div>
-    <div id="entry-tax-both" style="display:none;font-size:11px;color:var(--text3);text-align:right;padding:2px 0;font-family:'DM Mono',monospace;"></div>
+    <div id="entry-tax-both" style="visibility:hidden;font-size:11px;color:var(--text3);text-align:right;padding:2px 0;font-family:'DM Mono',monospace;min-height:1.4em;"></div>
     <div class="numpad-wrap" id="entry-numpad">
       <div class="numpad-grid">
         <div class="numpad-ops-row">
@@ -941,7 +941,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
         </label>
         <span class="tax-preview" id="edit-tax-preview"></span>
       </div>
-      <div id="edit-tax-both" style="display:none;font-size:11px;color:var(--text3);text-align:right;padding:2px 0 6px;font-family:'DM Mono',monospace;"></div>
+      <div id="edit-tax-both" style="visibility:hidden;font-size:11px;color:var(--text3);text-align:right;padding:2px 0 6px;font-family:'DM Mono',monospace;min-height:1.4em;"></div>
       <div class="numpad-wrap" id="edit-numpad">
         <div class="numpad-grid">
           <div class="numpad-ops-row">
@@ -2166,22 +2166,22 @@ function updateTaxPreview(){
       const taxed=Math.round(amt*(1+rate/100));
       preview.textContent=`→ 税込 ¥${fmtAmt(taxed)}（${rate}%）`;
       preview.className='tax-preview active';
-      if(bothEl){bothEl.textContent=`税抜 ¥${fmtAmt(amt)}  /  税込 ¥${fmtAmt(taxed)}`;bothEl.style.display='';}
+      if(bothEl){bothEl.textContent=`税抜 ¥${fmtAmt(amt)}  /  税込 ¥${fmtAmt(taxed)}`;bothEl.style.visibility='visible';}
     }else{
       preview.textContent='';
       preview.className='tax-preview';
       // 税込み入力 → 税抜きを表示
       if(rate>0){
         const excl=Math.round(amt/(1+rate/100));
-        if(bothEl){bothEl.textContent=`税込 ¥${fmtAmt(amt)}  /  税抜 ¥${fmtAmt(excl)}（${rate}%）`;bothEl.style.display='';}
+        if(bothEl){bothEl.textContent=`税込 ¥${fmtAmt(amt)}  /  税抜 ¥${fmtAmt(excl)}（${rate}%）`;bothEl.style.visibility='visible';}
       }else{
-        if(bothEl)bothEl.style.display='none';
+        if(bothEl)bothEl.style.visibility='hidden';
       }
     }
   }else{
     preview.textContent='';
     preview.className='tax-preview';
-    if(bothEl)bothEl.style.display='none';
+    if(bothEl)bothEl.style.visibility='hidden';
   }
 }
 
@@ -2199,21 +2199,21 @@ function updateEditTaxPreview(){
       const taxed=Math.round(amt*(1+rate/100));
       preview.textContent=`→ 税込 ¥${fmtAmt(taxed)}（${rate}%）`;
       preview.className='tax-preview active';
-      if(bothEl){bothEl.textContent=`税抜 ¥${fmtAmt(amt)}  /  税込 ¥${fmtAmt(taxed)}`;bothEl.style.display='';}
+      if(bothEl){bothEl.textContent=`税抜 ¥${fmtAmt(amt)}  /  税込 ¥${fmtAmt(taxed)}`;bothEl.style.visibility='visible';}
     }else{
       preview.textContent='';
       preview.className='tax-preview';
       if(rate>0){
         const excl=Math.round(amt/(1+rate/100));
-        if(bothEl){bothEl.textContent=`税込 ¥${fmtAmt(amt)}  /  税抜 ¥${fmtAmt(excl)}（${rate}%）`;bothEl.style.display='';}
+        if(bothEl){bothEl.textContent=`税込 ¥${fmtAmt(amt)}  /  税抜 ¥${fmtAmt(excl)}（${rate}%）`;bothEl.style.visibility='visible';}
       }else{
-        if(bothEl)bothEl.style.display='none';
+        if(bothEl)bothEl.style.visibility='hidden';
       }
     }
   }else{
     preview.textContent='';
     preview.className='tax-preview';
-    if(bothEl)bothEl.style.display='none';
+    if(bothEl)bothEl.style.visibility='hidden';
   }
 }
 
@@ -3717,7 +3717,7 @@ function openEdit(id){
       const bothEl=document.getElementById('edit-tax-both');
       if(bothEl){
         bothEl.textContent=`税抜 ¥${fmtAmt(tx.taxExcl)}  /  税込 ¥${fmtAmt(tx.amount)}（${tx.taxRate}%）`;
-        bothEl.style.display='';
+        bothEl.style.visibility='visible';
       }
       const preview=document.getElementById('edit-tax-preview');
       if(preview){
