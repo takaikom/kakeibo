@@ -407,6 +407,26 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
 .tax-rate-input{width:80px;height:36px;border:1.5px solid var(--border2);border-radius:10px;padding:0 8px;font-family:'DM Mono',monospace;font-size:13px;color:var(--text);background:var(--bg);outline:none;text-align:right;}
 .tax-rate-input:focus{border-color:var(--accent);}
 
+/* ── ACCOUNT CLOSING/PAYMENT DAY SETTINGS ── */
+.sort-list-acc-days{display:flex;align-items:center;gap:3px;flex-shrink:0;margin-right:4px;}
+.sort-list-acc-days input[type=number]{width:38px;height:28px;border:1.5px solid var(--border2);border-radius:8px;padding:0 3px;font-family:'DM Mono',monospace;font-size:11px;color:var(--text);background:var(--bg);outline:none;text-align:center;}
+.sort-list-acc-days input[type=number]:focus{border-color:var(--blue);}
+.sort-list-acc-days select{height:28px;border:1.5px solid var(--border2);border-radius:8px;padding:0 2px;font-family:'Noto Sans JP',sans-serif;font-size:11px;color:var(--text);background:var(--bg);outline:none;max-width:62px;cursor:pointer;}
+.sort-list-acc-days select:focus{border-color:var(--blue);}
+.sort-list-acc-days .acc-day-label{font-size:10px;color:var(--text3);white-space:nowrap;}
+
+/* ── AGG ACCOUNT SUMMARY ── */
+.agg-acc-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:10px;}
+.agg-acc-title{font-size:12px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text3);margin-bottom:10px;}
+.agg-acc-group{margin-bottom:14px;}
+.agg-acc-group:last-child{margin-bottom:0;}
+.agg-acc-name{font-size:13px;font-weight:700;color:var(--text2);margin-bottom:6px;display:flex;align-items:center;gap:6px;}
+.agg-acc-period-row{display:flex;align-items:center;justify-content:space-between;padding:7px 10px;border-radius:8px;background:var(--surface2);margin-bottom:4px;font-size:12px;}
+.agg-acc-period-label{color:var(--text2);font-weight:500;}
+.agg-acc-period-amt{font-family:'DM Mono',monospace;color:var(--expense-color);font-weight:500;}
+.agg-acc-period-amt.income{color:var(--income-color);}
+.agg-acc-payment{font-size:11px;color:var(--amber);font-weight:600;margin-top:1px;padding-left:10px;}
+
 /* ── グループ設定カード ── */
 .group-manage-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 16px;margin-bottom:10px;}
 .group-manage-row{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
@@ -809,6 +829,16 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
       <div class="setup-step"><div class="setup-num">5</div><div>他のメンバーも同じURLを設定し、同じグループ名・自分の名前で参加する</div></div>
     </div>
   </div>
+  <div class="section-label">アプリ</div>
+  <div class="settings-card">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--text2);">アプリを最新版に更新</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px;">画面が古いまま変わらない場合に実行してください</div>
+      </div>
+      <button class="secondary-btn" style="flex-shrink:0;height:38px;font-size:13px;white-space:nowrap;" onclick="clearCacheAndReload()">🔄 更新</button>
+    </div>
+  </div>
 </div>
 
 <!-- ══ MENU SHEET ══ -->
@@ -1078,6 +1108,7 @@ function newUser(id, name, isChild){
     incomeCats:  isChild ? CHILD_INCOME_CATS.slice()  : DEFAULT_INCOME_CATS.slice(),
     expenseAccounts: DEFAULT_EXPENSE_ACCOUNTS.slice(),
     incomeAccounts:  DEFAULT_INCOME_ACCOUNTS.slice(),
+    accountSettings: {}, // { 'expense:科目名': { closingDay: N, paymentDay: N, paymentMonthOffset: N } }
     budgets: {}, totalBudget: 0,
     taxRates: {}, defaultTaxRate: 10,
     transactions: []
@@ -1118,6 +1149,78 @@ let entrySelectedAccount='';
 
 function getExpenseAccounts(){return getCurrentUser().expenseAccounts||DEFAULT_EXPENSE_ACCOUNTS.slice();}
 function getIncomeAccounts(){return getCurrentUser().incomeAccounts||DEFAULT_INCOME_ACCOUNTS.slice();}
+
+// 相手勘定科目の締め日・支払日設定
+function getAccountSettings(){return getCurrentUser().accountSettings||{};}
+// typeは 'expense' or 'income'。キーは 'expense:科目名' の形式で支出/収入を区別する
+function getAccountSetting(type, account){return (getAccountSettings()[type+':'+account])||{};}
+function saveAccountSetting(type, account, key, val){
+  const mapKey=type+':'+account;
+  mutateUser(u=>{
+    if(!u.accountSettings)u.accountSettings={};
+    if(!u.accountSettings[mapKey])u.accountSettings[mapKey]={};
+    if(key==='paymentMonthOffset'){
+      // 0=当月も有効値なのでisNaN・空文字のみ除外
+      const n=parseInt(val);
+      if(val===''||val===null||isNaN(n)){
+        delete u.accountSettings[mapKey][key];
+      }else{
+        u.accountSettings[mapKey][key]=n; // -1〜3
+      }
+    }else{
+      const n=parseInt(val);
+      if(isNaN(n)||val===''||val===null){
+        delete u.accountSettings[mapKey][key];
+      }else{
+        u.accountSettings[mapKey][key]=Math.min(31,Math.max(1,n));
+      }
+    }
+    // すべて未設定なら科目設定ごと削除
+    const s=u.accountSettings[mapKey];
+    if(s&&s.closingDay==null&&s.paymentDay==null&&s.paymentMonthOffset==null)
+      delete u.accountSettings[mapKey];
+  });
+}
+
+// 締め期間計算: 取引日dateStrが属する締め期間の「締め日」(Date)と「開始日」(Date)を返す
+// closingDay=15 なら、15日締め→翌月15日が次の締め日
+// 例: 5/16〜6/15 が「6/15締め」
+function getClosingPeriod(dateStr, closingDay){
+  const d=new Date(dateStr+'T00:00:00');
+  const day=d.getDate();
+  let cy=d.getFullYear(), cm=d.getMonth(); // 0-indexed
+  // 締め日より後（>closingDay）なら翌月締め、以前（<=closingDay）なら今月締め
+  if(day>closingDay){cm+=1;}
+  if(cm>11){cm=0;cy+=1;}
+  // 締め日（月末補正）
+  const lastDay=new Date(cy,cm+1,0).getDate();
+  const actualClosingDay=Math.min(closingDay,lastDay);
+  const closingDate=new Date(cy,cm,actualClosingDay);
+  // 開始日：前月の締め日翌日
+  let py=cy,pm=cm-1;
+  if(pm<0){pm=11;py-=1;}
+  const prevLastDay=new Date(py,pm+1,0).getDate();
+  const prevClosingDay=Math.min(closingDay,prevLastDay);
+  const startDate=new Date(py,pm,prevClosingDay+1);
+  return {closingDate, startDate};
+}
+
+// 支払予定日: 締め日を基準に paymentMonthOffset ヶ月後の paymentDay 日
+// paymentMonthOffset: -1=前月, 0=当月, 1=翌月(デフォルト), 2=翌々月, 3=翌々々月
+function getPaymentDate(closingDate, paymentDay, paymentMonthOffset){
+  const offset = (paymentMonthOffset != null) ? paymentMonthOffset : 1; // 未設定は翌月
+  let py=closingDate.getFullYear(), pm=closingDate.getMonth()+offset;
+  // pm は 0-indexed 換算で closingDate.getMonth() + offset
+  while(pm>11){pm-=12;py+=1;}
+  while(pm<0) {pm+=12;py-=1;}
+  const lastDay=new Date(py,pm+1,0).getDate();
+  const actualDay=Math.min(paymentDay,lastDay);
+  return new Date(py,pm,actualDay);
+}
+
+function fmtDateMD(d){return`${d.getMonth()+1}/${d.getDate()}`;}
+function fmtDateYMD(d){return`${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;}
+function isoFromDate(d){return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
 
 function mutateUser(fn){
   const d=loadGroupData();
@@ -1386,6 +1489,7 @@ async function syncFromRemote(silent=false){
       if(ru.incomeCats) syncedUser.incomeCats =ru.incomeCats;
       if(ru.expenseAccounts)syncedUser.expenseAccounts=ru.expenseAccounts;
       if(ru.incomeAccounts) syncedUser.incomeAccounts =ru.incomeAccounts;
+      if(ru.accountSettings!=null)syncedUser.accountSettings=ru.accountSettings;
       if(ru.budgets!=null)syncedUser.budgets=ru.budgets;
       if(ru.totalBudget!=null)syncedUser.totalBudget=ru.totalBudget;
       if(ru.budgetDisplayItems!=null)syncedUser.budgetDisplayItems=ru.budgetDisplayItems;
@@ -2941,6 +3045,110 @@ function renderAgg(){
   const el=document.getElementById('agg-content');
   const sorted=Object.entries(periods).sort((a,b)=>b[0].localeCompare(a[0]));
   if(!sorted.length){el.innerHTML='<div class="empty-state">データがありません</div>';return;}
+
+  // ── 勘定科目別サマリを構築 ──
+  const accSettingsMap = getAccountSettings();
+  // 支出・収入すべての科目を収集
+  const allAccounts = [...new Set(txs.map(t=>t.account||'（未設定）'))];
+
+  // 科目ごとに締め期間別集計
+  function buildAccSummary(type){
+    const accList = type==='expense' ? getExpenseAccounts() : getIncomeAccounts();
+    // 対象タイプの取引のみ
+    const targetTxs = txs.filter(t=>t.type===type);
+    if(!targetTxs.length) return '';
+
+    // 科目ごとに処理
+    const groups = [];
+    // 設定済み科目を先に、未設定・未知科目をあとに
+    const knownAccounts = accList.filter(a=>targetTxs.some(t=>(t.account||'（未設定）')===a));
+    const otherAccounts = [...new Set(targetTxs.map(t=>t.account||'（未設定）'))].filter(a=>!accList.includes(a)&&a!=='（未設定）');
+    const unsetExists = targetTxs.some(t=>!t.account);
+    const orderedAccounts = [...knownAccounts, ...otherAccounts, ...(unsetExists?['（未設定）']:[])];
+
+    orderedAccounts.forEach(account => {
+      const accTxs = targetTxs.filter(t=>(t.account||'（未設定）')===account);
+      if(!accTxs.length) return;
+
+      const rawAccount = account === '（未設定）' ? null : account;
+      const setting = rawAccount ? (accSettingsMap[type+':'+rawAccount]||{}) : {};
+      const closingDay = setting.closingDay||null;
+      const paymentDay = setting.paymentDay||null;
+      const paymentMonthOffset = setting.paymentMonthOffset != null ? setting.paymentMonthOffset : 1;
+
+      let periodRows = '';
+
+      if(closingDay){
+        // 締め期間別に集計
+        const periodMap = new Map();
+        accTxs.forEach(t=>{
+          const {closingDate, startDate} = getClosingPeriod(t.date, closingDay);
+          const key = isoFromDate(closingDate);
+          if(!periodMap.has(key))periodMap.set(key,{closingDate,startDate,amount:0,txCount:0});
+          const p = periodMap.get(key);
+          p.amount += t.amount;
+          p.txCount++;
+        });
+        // 降順ソート
+        const sortedPeriods = [...periodMap.entries()].sort((a,b)=>b[0].localeCompare(a[0]));
+
+        // 集計モードでフィルタ：月次なら表示期間内の締め期間のみ
+        sortedPeriods.forEach(([key,p])=>{
+          const paymentDateObj = paymentDay ? getPaymentDate(p.closingDate, paymentDay, paymentMonthOffset) : null;
+          const payLabel = paymentDateObj
+            ? `<div class="agg-acc-payment">→ ${fmtDateYMD(paymentDateObj)} 引き落とし予定</div>`
+            : '';
+          const amtClass = type==='income' ? 'income' : '';
+          const amtPrefix = type==='income' ? '+' : '-';
+          periodRows += `<div style="margin-bottom:6px;">
+            <div class="agg-acc-period-row">
+              <span class="agg-acc-period-label">${fmtDateMD(p.startDate)}〜${fmtDateMD(p.closingDate)} 締め
+                <span style="font-size:10px;color:var(--text3);margin-left:4px;">${p.txCount}件</span>
+              </span>
+              <span class="agg-acc-period-amt ${amtClass}">${amtPrefix}¥${fmtAmt(p.amount)}</span>
+            </div>
+            ${payLabel}
+          </div>`;
+        });
+      } else {
+        // 締め日なし：月次/年次モードに合わせて集計
+        const monthMap = {};
+        accTxs.forEach(t=>{
+          const k = aggMode==='monthly' ? txMonth(t) : txYear(t);
+          monthMap[k]=(monthMap[k]||0)+t.amount;
+        });
+        const sortedMonths = Object.entries(monthMap).sort((a,b)=>b[0].localeCompare(a[0]));
+        sortedMonths.forEach(([k,amt])=>{
+          let label=k;
+          if(aggMode==='monthly'){const[y,m]=k.split('-');label=`${y}年${parseInt(m)}月`;}
+          else label=`${k}年`;
+          const amtClass = type==='income' ? 'income' : '';
+          const amtPrefix = type==='income' ? '+' : '-';
+          periodRows += `<div class="agg-acc-period-row" style="margin-bottom:4px;">
+            <span class="agg-acc-period-label">${label}</span>
+            <span class="agg-acc-period-amt ${amtClass}">${amtPrefix}¥${fmtAmt(amt)}</span>
+          </div>`;
+        });
+      }
+
+      const offsetLabel = ['前月','当月','翌月','翌々月','3ヶ月後'][paymentMonthOffset+1] || `${paymentMonthOffset>0?'+':''}${paymentMonthOffset}ヶ月`;
+      const payBadge = (closingDay && paymentDay)
+        ? `<span style="font-size:10px;padding:1px 7px;border-radius:10px;background:var(--amber-light);color:var(--amber);border:1px solid var(--amber);font-weight:600;">${offsetLabel}${paymentDay}日払</span>`
+        : '';
+      const closingBadge = closingDay
+        ? `<span style="font-size:10px;padding:1px 7px;border-radius:10px;background:var(--blue-light);color:var(--blue);border:1px solid var(--blue);font-weight:600;">毎月${closingDay}日締め</span>${payBadge}`
+        : '';
+      groups.push(`<div class="agg-acc-group">
+        <div class="agg-acc-name">📌 ${esc(account)} ${closingBadge}</div>
+        ${periodRows}
+      </div>`);
+    });
+
+    if(!groups.length) return '';
+    const titleLabel = type==='expense' ? '支出 科目別' : '収入 科目別';
+    return `<div class="agg-acc-card"><div class="agg-acc-title">${titleLabel}</div>${groups.join('')}</div>`;
+  }
+
   el.innerHTML=sorted.map(([period,p])=>{
     const balance=p.income-p.expense;
     let label=period;
@@ -2969,6 +3177,15 @@ function renderAgg(){
     ${expenseRows?`<div class="agg-cat-card"><div class="agg-cat-title">支出 内訳</div>${expenseRows}</div>`:''}
     ${incomeRows?`<div class="agg-cat-card"><div class="agg-cat-title">収入 内訳</div>${incomeRows}</div>`:''}`;
   }).join('<hr style="border:none;border-top:2px solid var(--border2);margin:16px 0;">');
+
+  // 勘定科目別サマリは期間集計とは独立して全取引から生成（最後に追記）
+  const expAccSummary = buildAccSummary('expense');
+  const incAccSummary = buildAccSummary('income');
+  if(expAccSummary||incAccSummary){
+    el.innerHTML += `<hr style="border:none;border-top:2px solid var(--border2);margin:16px 0;">
+      <div style="font-size:12px;font-weight:700;letter-spacing:.5px;color:var(--text3);margin-bottom:10px;">📌 勘定科目別サマリ</div>
+      ${expAccSummary}${incAccSummary}`;
+  }
 }
 
 // ════════════════════════════════════════
@@ -3473,11 +3690,52 @@ function renderAccountChips(type){
   const listEl  = wrap.querySelector('.sort-list');
   const upBtn   = wrap.querySelector('[data-dir="up"]');
   const downBtn = wrap.querySelector('[data-dir="down"]');
+
+  // 締め日・支払日・支払月入力欄を各行にインライン表示
+  const accDayColFn = (account) => {
+    const s = getAccountSetting(type, account);
+    const cd  = s.closingDay        != null ? s.closingDay        : '';
+    const pd  = s.paymentDay        != null ? s.paymentDay        : '';
+    const pmo = s.paymentMonthOffset != null ? s.paymentMonthOffset : 1; // デフォルト翌月
+    const accEsc  = esc(account).replace(/'/g, "\\'");
+    const typeEsc = type;
+    // 支払月オフセット選択肢（現実に存在するパターン）
+    // -1: 前月（前払い系サービス）, 0: 当月, 1: 翌月（最多）, 2: 翌々月, 3: 翌々々月（一部カード）
+    const monthOpts = [
+      {v:-1, l:'前月'},
+      {v: 0, l:'当月'},
+      {v: 1, l:'翌月'},
+      {v: 2, l:'翌々月'},
+      {v: 3, l:'3ヶ月後'},
+    ].map(o=>`<option value="${o.v}"${pmo===o.v?' selected':''}>${o.l}</option>`).join('');
+    return `<span class="sort-list-acc-days" onclick="event.stopPropagation()">
+      <span class="acc-day-label">締</span>
+      <input type="number" min="1" max="31" placeholder="-" value="${cd}"
+        onchange="saveAccountSetting('${typeEsc}','${accEsc}','closingDay',this.value);renderAgg();"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}"
+        title="締め日（毎月○日）">
+      <span class="acc-day-label">日</span>
+      <select
+        onchange="saveAccountSetting('${typeEsc}','${accEsc}','paymentMonthOffset',this.value);renderAgg();"
+        title="支払月"
+        style="height:28px;border:1.5px solid var(--border2);border-radius:8px;padding:0 2px;font-family:inherit;font-size:11px;color:var(--text);background:var(--bg);outline:none;max-width:56px;">
+        ${monthOpts}
+      </select>
+      <input type="number" min="1" max="31" placeholder="-" value="${pd}"
+        onchange="saveAccountSetting('${typeEsc}','${accEsc}','paymentDay',this.value);renderAgg();"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();this.blur();}"
+        title="支払日（○日）">
+      <span class="acc-day-label">日</span>
+    </span>`;
+  };
+
   makeSortableList(
     listEl, upBtn, downBtn,
     ()=>type==='expense'?getExpenseAccounts():getIncomeAccounts(),
     items=>mutateUser(u=>{if(type==='expense')u.expenseAccounts=items;else u.incomeAccounts=items;}),
-    ()=>{renderEntryAccountPicker(); renderAccountChips(type);}
+    ()=>{renderEntryAccountPicker(); renderAccountChips(type);},
+    accDayColFn,
+    null  // catTypeはnull（勘定科目はrenameCategory不要）
   );
 }
 
@@ -4958,7 +5216,29 @@ document.getElementById('edit-amount').addEventListener('blur',function(){
   updateEditTaxPreview();
 });
 
-// バックグラウンド復帰対応
+// ════════════════════════════════════════
+// アプリ手動アップデート（キャッシュ削除＋リロード）
+// ════════════════════════════════════════
+function clearCacheAndReload(){
+  if(!confirm('キャッシュを削除してアプリを最新版に更新しますか？\n\n※ データは削除されません。')) return;
+  if('caches' in window){
+    caches.keys()
+      .then(keys=>Promise.all(keys.map(k=>caches.delete(k))))
+      .then(()=>{
+        if('serviceWorker' in navigator){
+          navigator.serviceWorker.getRegistrations()
+            .then(regs=>Promise.all(regs.map(r=>r.unregister())))
+            .then(()=>location.reload(true));
+        }else{
+          location.reload(true);
+        }
+      });
+  }else{
+    location.reload(true);
+  }
+}
+
+
 document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='visible'){
     const pinned=getPinnedUserId();const d=loadGroupData();
