@@ -2540,9 +2540,10 @@ function renderHomeBudget(){
   const totalOver=totalBudget>0&&totalExpense>totalBudget;
 
   // 表示対象を絞り込む（null=全て表示, []でも全て表示）
-  const showTotal = !budgetDisplayItems || budgetDisplayItems.includes('__total__');
+  const showTotal = (budgetDisplayItems === null || budgetDisplayItems === undefined)
+    || budgetDisplayItems.includes('__total__');
   const allCatsWithBudget = Object.entries(budgets).filter(([,v])=>v>0);
-  const catsToShow = !budgetDisplayItems || budgetDisplayItems.length===0
+  const catsToShow = budgetDisplayItems === null || budgetDisplayItems === undefined
     ? allCatsWithBudget
     : allCatsWithBudget.filter(([cat])=>budgetDisplayItems.includes(cat));
 
@@ -3777,7 +3778,8 @@ function renderBudgetSettings(){
   txs.forEach(t=>{catSpend[t.category]=(catSpend[t.category]||0)+t.amount;});
   const totalExpense=txs.reduce((s,t)=>s+t.amount,0);
 
-  const isChecked=key=>!budgetDisplayItems||budgetDisplayItems.includes(key);
+  const isChecked = key => (budgetDisplayItems === null || budgetDisplayItems === undefined)
+    || budgetDisplayItems.includes(key);
 
   const el=document.getElementById('budget-list');
   // ヘッダー行
