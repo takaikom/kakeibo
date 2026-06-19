@@ -1,14 +1,6 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-6HLK2HC7W5"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-  
-    gtag('config', 'G-6HLK2HC7W5');
-  </script>
   <script type="text/javascript">
         (function(c,l,a,r,i,t,y){
             c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
@@ -203,16 +195,13 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
 /* ── SWIPE DELETE (スマホ) / HOVER DELETE (PC) ── */
 .tx-swipe-wrap{position:relative;overflow:hidden;border-radius:12px;margin-bottom:6px;}
 .tx-swipe-wrap .tx-card{margin-bottom:0;border-radius:12px;position:relative;transition:transform .2s ease;will-change:transform;touch-action:pan-y;}
-.tx-swipe-bg{position:absolute;right:0;top:0;bottom:0;width:80px;background:var(--red-mid);display:flex;align-items:center;justify-content:center;border-radius:0 12px 12px 0;color:white;font-size:18px;pointer-events:none;}
-/* PC: 削除ボタンはhoverで表示 */
-@media(pointer:fine){
-  .card-actions .act-btn.del{display:none;}
-  .tx-card:hover .card-actions .act-btn.del{display:flex;}
-}
-/* スマホ: 削除ボタン非表示（スワイプで代替） */
-@media(pointer:coarse){
-  .card-actions .act-btn.del{display:none;}
-}
+.tx-swipe-bg{position:absolute;right:0;top:0;bottom:0;width:80px;background:var(--red-mid);display:flex;align-items:center;justify-content:center;border-radius:0 12px 12px 0;color:white;font-size:18px;pointer-events:none;opacity:0;transition:opacity .15s;cursor:pointer;}
+.tx-swipe-bg.visible{opacity:1;pointer-events:auto;}
+/* 削除ボタン: card-actions内に常駐、PCのみカードホバー時にフェードイン。スマホは非表示(スワイプ代替) */
+.tx-hover-del{width:26px;height:26px;border-radius:7px;border:1px solid var(--border2);background:var(--surface2);color:var(--text3);font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .15s,background .12s,color .12s,border-color .12s;pointer-events:none;flex-shrink:0;}
+.tx-hover-del:hover{background:var(--red-light);color:var(--red-mid);border-color:var(--red-mid);}
+.tx-swipe-wrap:hover .tx-hover-del{opacity:1;pointer-events:auto;}
+@media(hover:none){.tx-hover-del{display:none !important;}}
 
 /* ── LOCK BUTTON ── */
 .tx-lock-btn{font-size:15px;background:none;border:none;cursor:pointer;padding:2px 4px;border-radius:6px;color:var(--text3);flex-shrink:0;line-height:1;-webkit-tap-highlight-color:transparent;}
@@ -943,7 +932,10 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
       <div class="sheet-title">取引を編集</div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
         <div id="edit-full-id" style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;"></div>
-        <button id="edit-lock-btn" onclick="toggleEditLock()" style="font-size:13px;background:none;border:1px solid var(--border2);border-radius:8px;padding:2px 8px;cursor:pointer;color:var(--text3);font-family:inherit;white-space:nowrap;" title="この取引のロックを切り替え">🔓 解除中</button>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <button id="edit-copy-btn" onclick="copyTxFromEdit()" style="font-size:13px;background:var(--blue-light);border:1px solid var(--blue);border-radius:8px;padding:2px 8px;cursor:pointer;color:var(--blue);font-family:inherit;white-space:nowrap;" title="この取引をコピーして新規登録">📋 コピー</button>
+          <button id="edit-lock-btn" onclick="toggleEditLock()" style="font-size:13px;background:none;border:1px solid var(--border2);border-radius:8px;padding:2px 8px;cursor:pointer;color:var(--text3);font-family:inherit;white-space:nowrap;" title="この取引のロックを切り替え">🔓 解除中</button>
+        </div>
       </div>
       <!-- 1. 支出/収入 -->
       <div class="type-toggle" style="margin-bottom:14px;">
@@ -2641,9 +2633,8 @@ function txCard(t){
     </div>
     <div class="tx-amount ${t.type}">${sign}¥${fmtAmt(t.amount)}</div>
     <div class="card-actions">
-      <button class="act-btn copy" data-id="${t.id}" title="コピーして新規登録">📋</button>
+      <button class="tx-hover-del" data-id="${t.id}" title="削除" ${locked?'disabled style="opacity:.4;cursor:not-allowed;"':''}>✕</button>
       <button class="act-btn edit" data-id="${t.id}" ${locked?'disabled style="opacity:.4;cursor:not-allowed;"':''}>✏️</button>
-      <button class="act-btn del" data-id="${t.id}" ${locked?'disabled style="opacity:.4;cursor:not-allowed;"':''}>✕</button>
       <button class="tx-lock-btn${locked?' locked':''}" data-id="${t.id}" title="${locked?'ロック中（クリックで解除）':'解除中（クリックでロック）'}">${locked?'🔒':'🔓'}</button>
     </div>
   </div>`;
@@ -2676,9 +2667,8 @@ function txCardFull(t){
     </div>
     <div class="tx-amount ${t.type}">${sign}¥${fmtAmt(t.amount)}</div>
     <div class="card-actions">
-      <button class="act-btn copy" data-id="${t.id}" title="コピーして新規登録">📋</button>
+      <button class="tx-hover-del" data-id="${t.id}" title="削除" ${locked?'disabled style="opacity:.4;cursor:not-allowed;"':''}>✕</button>
       <button class="act-btn edit" data-id="${t.id}" ${locked?'disabled style="opacity:.4;cursor:not-allowed;"':''}>✏️</button>
-      <button class="act-btn del" data-id="${t.id}" ${locked?'disabled style="opacity:.4;cursor:not-allowed;"':''}>✕</button>
       <button class="tx-lock-btn${locked?' locked':''}" data-id="${t.id}" title="${locked?'ロック中（クリックで解除）':'解除中（クリックでロック）'}">${locked?'🔒':'🔓'}</button>
     </div>
   </div>`;
@@ -2794,7 +2784,6 @@ const isPointerCoarse=window.matchMedia('(pointer:coarse)').matches
   ||('ontouchstart' in window)||(navigator.maxTouchPoints>0);
 
 function wrapTxCardWithSwipe(cardEl){
-  if(!isPointerCoarse)return cardEl;
   const id=cardEl.dataset.id;
   if(!id)return cardEl;
   const wrap=document.createElement('div');
@@ -2804,6 +2793,9 @@ function wrapTxCardWithSwipe(cardEl){
   bg.textContent='🗑';
   wrap.appendChild(bg);
   wrap.appendChild(cardEl);
+
+  // スワイプ削除はタッチデバイスのみ
+  if(!isPointerCoarse)return wrap;
 
   let startX=0,startY=0,dx=0,swiping=false,triggered=false;
   const THRESHOLD=72;
@@ -2826,21 +2818,41 @@ function wrapTxCardWithSwipe(cardEl){
     }
     dx=Math.min(0,cx-startX);
     cardEl.style.transform=`translateX(${dx}px)`;
-    bg.style.opacity=Math.min(1,Math.abs(dx)/THRESHOLD);
+  },{passive:true});
+
+  // 外側タップでリセット
+  function resetSwipe(){
+    cardEl.style.transition='transform .2s ease';
+    cardEl.style.transform='';
+    bg.classList.remove('visible');
+  }
+  document.addEventListener('touchstart',e=>{
+    if(!bg.classList.contains('visible'))return;
+    if(!wrap.contains(e.target))resetSwipe();
   },{passive:true});
 
   cardEl.addEventListener('touchend',e=>{
-    if(!swiping){cardEl.style.transform='';return;}
+    if(!swiping){
+      if(bg.classList.contains('visible'))resetSwipe();
+      return;
+    }
     cardEl.style.transition='transform .2s ease';
     if(dx<-THRESHOLD&&!isTxLocked(id)){
-      triggered=true;
-      cardEl.style.transform='translateX(-110%)';
-      setTimeout(()=>{softDeleteTx(id);},200);
+      // 第1段階: カードを80px左にとめて削除ボタン表示
+      cardEl.style.transform='translateX(-80px)';
+      bg.classList.add('visible');
     }else{
-      cardEl.style.transform='';
+      resetSwipe();
     }
-    bg.style.opacity='';
   },{passive:true});
+
+  // 第2段階: 削除ボタンタップで実際に削除
+  bg.addEventListener('click',()=>{
+    if(!bg.classList.contains('visible'))return;
+    cardEl.style.transition='transform .2s ease';
+    cardEl.style.transform='translateX(-110%)';
+    setTimeout(()=>{softDeleteTx(id);},200);
+  });
 
   return wrap;
 }
@@ -2851,7 +2863,7 @@ function bindTxButtons(el){
     if(b.disabled)return;
     openEdit(b.dataset.id);
   }));
-  el.querySelectorAll('.act-btn.del').forEach(b=>b.addEventListener('click',e=>{
+  el.querySelectorAll('.tx-hover-del').forEach(b=>b.addEventListener('click',e=>{
     if(b.disabled)return;
     softDeleteTx(b.dataset.id);
   }));
@@ -2862,7 +2874,6 @@ function bindTxButtons(el){
 
 // スワイプラップをtx-cardリストに適用
 function applySwipeWraps(el){
-  if(!isPointerCoarse)return;
   el.querySelectorAll('.tx-card[data-id]').forEach(card=>{
     if(card.parentElement&&card.parentElement.classList.contains('tx-swipe-wrap'))return;
     const originalParent=card.parentElement;
@@ -4112,6 +4123,11 @@ function getEffectiveEditAccount(){
     return document.getElementById('edit-account-custom')?.value.trim()||'現金・預金';
   }
   return editSelectedAccount||'現金・預金';
+}
+function copyTxFromEdit(){
+  const id=editingId;
+  closeEditSheet();
+  copyTx(id);
 }
 function closeEditSheet(){document.getElementById('edit-sheet').classList.remove('open');}
 document.getElementById('edit-sheet').addEventListener('click',e=>{if(e.target.id==='edit-sheet')closeEditSheet();});
