@@ -1,13 +1,75 @@
+<!--
+ コード修正時には変更履歴を更新すること！
+ * === 変更履歴 ===
+  * [v69]
+  *   - スマホでの金額入力欄常時表示
+  * [v68]
+ *   - 習慣カードの左スワイプ削除を2ステップ方式に変更
+ *     スワイプで削除ボタンを表示し、ボタンタップ時のみ archiveHabit() を実行
+ *     （勢いよくスワイプしても即削除されなくなった）
+ *     - touchend でカードを SNAP_X(-80px) にスナップして delBg を表示
+ *     - delBg.click で削除実行、カード外タップで snapBack()
+ *     - CSS: .habit-swipe-del.visible に pointer-events:auto を追加
+ *
+ * [v67]
+ *   - deletedUsersをGASに保存しないよう変更（ローカルのみ保持）
+ *     削除したユーザーが他デバイスの同期で復活する問題を修正
+ *     gasSend1/2: payloadから deletedUsers を除外
+ *     gasReceive1/2: remote.deletedUsers を参照せず、ローカルの deletedUsers のみでフィルタ
+ *
+ * [v66]
+ *   - add-bar レイアウト修正: position:fixed の left/right/margin で中央寄せに変更
+ *     （transform:translateX(-50%) をやめ、iOS各機種で＋ボタンが画面内に収まるよう対処）
+ *   - add-form に overflow:hidden、add-input に min-width:0 追加（フレックス溢れ防止）
+ *   - 習慣編集シートの名前入力を <input> → <textarea> に変更（長い名前を折り返して表示）
+ *     入力内容に応じて高さ自動調整（最大100px）
+ * [v65] 
+ *   -カレンダードット色変更
+ * [v64] メモ継続オン/オフ切り替え機能、画面遷移時のスクロール位置保存・復元（バグ修正含む）
+ *   - dayMemos エントリを {text, persist} 形式に拡張（文字列との後方互換あり）
+ *   - persist:false のメモは翌日以降に継続しない（その日だけのメモ）
+ *   - カレンダーのメモ編集ポップアップに「翌日以降も継続」トグルを追加
+ *   - 習慣カード設定画面のメモ欄にも同トグルを追加
+ *   - showScreen() がスクロール位置を画面IDごとに保存・復元するよう改修
+ *     （カレンダー→カード一覧など、どの画面間移動でも位置が保たれる）
+ *   - [bugfix] カレンダーで継続メモを削除しても元に戻る問題を修正
+ *       継続メモを空にして保存した場合、{text:'',persist:false} のブロックエントリを
+ *       dayMemos に保存し、getActiveMemo が継続を止めるよう対処
+ *
+ * [v63] カレンダーで過去月が表示できない問題を修正
+ *   - 原因：prev-month ボタンの click イベントリスナーが欠落していた
+ *   - 対応：next-month リスナーの直前に以下を追加
+ *       document.getElementById('prev-month').addEventListener('click',()=>{
+ *         calMonth--;if(calMonth<0){calMonth=11;calYear--;}renderCalendar();
+ *       });
+ *
+ * [v62] 「やめる！」カレンダー中央の「今月やった回数」が
+ *             過去月表示時も常に当月データを表示していた問題を修正
+ *   - 原因：getQuitMonthStats() が new Date() 固定で今月を参照していた
+ *   - 対応：引数 (year, month) を追加し、calYear/calMonth を渡すよう変更
+ *       function getQuitMonthStats(habit, year, month) { ... }
+ *       呼び出し側：getQuitMonthStats(habit, calYear, calMonth)
+ * =============== 
+ -->
 <!DOCTYPE html>
 <html lang="ja">
 <head>
+    <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-6HLK2HC7W5"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-6HLK2HC7W5');
+  </script>
   <script type="text/javascript">
-        (function(c,l,a,r,i,t,y){
-            c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
-            t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
-            y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
-        })(window,document,"clarity","script","wyo268ibxm");
-    </script>
+      (function(c,l,a,r,i,t,y){
+          c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+          t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+          y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+      })(window, document, "clarity", "script", "wyo268ibxm");
+  </script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>家計簿</title>
@@ -5119,10 +5181,53 @@ function showAmountCalcHint(el,hintId){
 // ════════════════════════════════════════
 // テンキー（スマホ：ボタン操作 / PC：キーボード入力も可）
 // ════════════════════════════════════════
+// 入力欄のカーソル位置が必ず見えるようにスクロールする
+function ensureCaretVisible(el){
+  try{
+    // ミラー要素でカーソルまでの幅を測定し、必要ならscrollLeftを調整
+    const caret=el.selectionStart!=null?el.selectionStart:el.value.length;
+    const cs=getComputedStyle(el);
+    const mirror=ensureCaretVisible._mirror||(ensureCaretVisible._mirror=(()=>{
+      const m=document.createElement('span');
+      m.style.position='absolute';
+      m.style.visibility='hidden';
+      m.style.whiteSpace='pre';
+      m.style.top='-9999px';
+      m.style.left='-9999px';
+      document.body.appendChild(m);
+      return m;
+    })());
+    mirror.style.font=cs.font;
+    mirror.style.fontSize=cs.fontSize;
+    mirror.style.fontFamily=cs.fontFamily;
+    mirror.style.fontWeight=cs.fontWeight;
+    mirror.style.letterSpacing=cs.letterSpacing;
+    mirror.textContent=el.value.slice(0,caret);
+    const caretX=mirror.scrollWidth;
+    const padL=parseFloat(cs.paddingLeft)||0;
+    const padR=parseFloat(cs.paddingRight)||0;
+    const visW=el.clientWidth-padL-padR;
+    const margin=12;
+    if(caretX-el.scrollLeft>visW-margin){
+      el.scrollLeft=caretX-visW+margin;
+    }else if(caretX-el.scrollLeft<margin){
+      el.scrollLeft=Math.max(0,caretX-margin);
+    }
+  }catch(e){}
+}
+
 (function setupNumpad(){
 
   const entryEl = document.getElementById('entry-amount');
   const editEl  = document.getElementById('edit-amount');
+
+  // テンキーのボタンはフォーカスを奪わない（カーソル位置を保持するため）
+  document.addEventListener('mousedown', e=>{
+    if(e.target.closest('.npk')) e.preventDefault();
+  });
+  document.addEventListener('touchstart', e=>{
+    if(e.target.closest('.npk')) e.preventDefault();
+  }, {passive:false});
 
   // ── タッチデバイス遅延判定 ──
   // 初期判定（pointer:coarse等）はAPK/WebViewで信頼できないため、
@@ -5139,9 +5244,10 @@ function showAmountCalcHint(el,hintId){
     // inputmodeをnoneに戻してOSキーボードを抑制
     entryEl.setAttribute('inputmode','none');
     editEl.setAttribute('inputmode','none');
-    // フォーカス中の要素があればテンキーを開く
-    if(document.activeElement===entryEl)
-      document.getElementById('entry-numpad').classList.add('open');
+    // 金額テンキーを常時表示にする
+    const ep=document.getElementById('entry-numpad');
+    if(ep)ep.classList.add('open');
+    // 編集シートが開いていれば編集テンキーも開く
     if(document.activeElement===editEl)
       document.getElementById('edit-numpad').classList.add('open');
   }
@@ -5162,11 +5268,18 @@ function showAmountCalcHint(el,hintId){
         .replace(/[×＊]/g,'*').replace(/[÷／]/g,'/')
         .replace(/[。．]/g,'.');
       if(after!==before){const p=el.selectionStart;el.value=after;try{el.setSelectionRange(p,p);}catch(e){}}
+      ensureCaretVisible(el);
       showAmountCalcHint(el, hintId);
       if(el.id==='entry-amount') updateTaxPreview();
     }
     entryEl.addEventListener('input', function(){ onPcInput(this,'entry-amount-hint'); });
     editEl.addEventListener('input',  function(){ onPcInput(this,'edit-amount-hint'); updateEditTaxPreview(); });
+  }
+
+  // ── タッチ端末では金額テンキーを常時表示（フォーカス不要）──
+  if(_touchConfirmed){
+    const ep=document.getElementById('entry-numpad');
+    if(ep)ep.classList.add('open');
   }
 
   // ── フォーカス時にテンキーを開く（タッチ確定済みの場合のみ）──
@@ -5188,8 +5301,14 @@ function showAmountCalcHint(el,hintId){
     const hintId=pad+'-amount-hint';
     if(!el)return;
 
+    // 入力欄にフォーカスを保持（カーソル位置追跡のため／キーボードはinputmodeで抑制）
+    if(document.activeElement!==el){
+      try{el.focus({preventScroll:true});}catch(e){el.focus();}
+    }
+
     if(val==='enter'){
-      padEl.classList.remove('open');
+      // タッチ端末ではテンキーは閉じない（常時表示）
+      if(!window._numpadTouchConfirmed) padEl.classList.remove('open');
       // 式は残す（resolveAmountInputはコメントアウト）
       // resolveAmountInput(el);
       const hint=document.getElementById(hintId);
@@ -5198,25 +5317,54 @@ function showAmountCalcHint(el,hintId){
       if(pad==='edit'){updateEditTaxPreview();}
       return;
     }
+
+    // ── カーソル位置を基準に編集する ──
+    const len=el.value.length;
+    let start=el.selectionStart, end=el.selectionEnd;
+    // 選択範囲が取得できない場合は末尾扱い
+    if(start===null||start===undefined){start=len;end=len;}
+    let caret=start;
+
     if(val==='del'){
-      el.value=el.value.slice(0,-1);
+      if(start!==end){
+        // 選択範囲を削除
+        el.value=el.value.slice(0,start)+el.value.slice(end);
+        caret=start;
+      }else if(start>0){
+        // カーソル直前の1文字を削除
+        el.value=el.value.slice(0,start-1)+el.value.slice(start);
+        caret=start-1;
+      }else{
+        caret=0;
+      }
     }else if(val==='clear'){
       el.value='';
+      caret=0;
     }else{
       const ops=['+','-','*','/'];
-      if(ops.includes(val)&&el.value.length>0&&ops.includes(el.value.slice(-1))){
-        el.value=el.value.slice(0,-1)+val;
+      const left=el.value.slice(0,start);
+      const right=el.value.slice(end);
+      // 演算子の連続入力：カーソル直前が演算子なら置き換える（選択なしの場合のみ）
+      if(ops.includes(val)&&start===end&&left.length>0&&ops.includes(left.slice(-1))){
+        el.value=left.slice(0,-1)+val+right;
+        caret=start; // 1文字置換なので位置は据え置き
       }else{
-        el.value+=val;
+        el.value=left+val+right;
+        caret=start+val.length;
       }
     }
+    // カーソル位置を復元し、その位置が見えるようにスクロール
+    try{el.setSelectionRange(caret,caret);}catch(e){}
+    ensureCaretVisible(el);
+
     showAmountCalcHint(el,hintId);
     if(pad==='entry')updateTaxPreview();
     if(pad==='edit')updateEditTaxPreview();
   });
 
-  // テンキー外タップで閉じる
+  // テンキー外タップで閉じる（タッチ端末は常時表示なので閉じない）
   document.addEventListener('click', e=>{
+    if(window._numpadTouchConfirmed) return;
     [['entry-amount','entry-numpad','entry-amount-hint'],
      ['edit-amount','edit-numpad','edit-amount-hint']].forEach(([inputId,padId,hintId])=>{
       const el=document.getElementById(inputId);
