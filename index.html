@@ -1,7 +1,7 @@
 <!--
  コード修正時には変更履歴を更新すること！
  * === 変更履歴 ===
-  * [v69]
+  * [v69,70]
   *   - スマホでの金額入力欄常時表示
   * [v68]
  *   - 習慣カードの左スワイプ削除を2ステップ方式に変更
@@ -5221,20 +5221,28 @@ function ensureCaretVisible(el){
   const entryEl = document.getElementById('entry-amount');
   const editEl  = document.getElementById('edit-amount');
 
-  // テンキーのボタンはフォーカスを奪わない（カーソル位置を保持するため）
-  document.addEventListener('mousedown', e=>{
-    if(e.target.closest('.npk')) e.preventDefault();
-  });
-  document.addEventListener('touchstart', e=>{
-    if(e.target.closest('.npk')) e.preventDefault();
-  }, {passive:false});
+  // テンキーのボタンを押す直前のカーソル位置を記録しておく
+  // （ボタンにフォーカスが移ってもカーソル位置を復元できるようにする）
+  let _lastSel = {entry:null, edit:null};
+  function rememberSel(el){
+    const key = el.id==='entry-amount' ? 'entry' : 'edit';
+    try{ _lastSel[key] = {start:el.selectionStart, end:el.selectionEnd}; }catch(e){}
+  }
+  entryEl.addEventListener('keyup', ()=>rememberSel(entryEl));
+  entryEl.addEventListener('click', ()=>rememberSel(entryEl));
+  entryEl.addEventListener('select', ()=>rememberSel(entryEl));
+  editEl.addEventListener('keyup', ()=>rememberSel(editEl));
+  editEl.addEventListener('click', ()=>rememberSel(editEl));
+  editEl.addEventListener('select', ()=>rememberSel(editEl));
 
   // ── タッチデバイス遅延判定 ──
   // 初期判定（pointer:coarse等）はAPK/WebViewで信頼できないため、
   // 実際のtouchstartイベントが発火した時点でタッチモードに切り替える。
   // これによりPCではテンキー非表示、スマホでは必ず表示される。
   let _touchConfirmed = window.matchMedia('(pointer: coarse)').matches
-    || ('ontouchstart' in window && navigator.maxTouchPoints > 0);
+    || ('ontouchstart' in window)
+    || (navigator.maxTouchPoints > 0)
+    || (navigator.msMaxTouchPoints > 0);
   window._numpadTouchConfirmed = _touchConfirmed;
 
   function activateTouchMode(){
@@ -5301,10 +5309,7 @@ function ensureCaretVisible(el){
     const hintId=pad+'-amount-hint';
     if(!el)return;
 
-    // 入力欄にフォーカスを保持（カーソル位置追跡のため／キーボードはinputmodeで抑制）
-    if(document.activeElement!==el){
-      try{el.focus({preventScroll:true});}catch(e){el.focus();}
-    }
+    const padKey = pad; // 'entry' or 'edit'
 
     if(val==='enter'){
       // タッチ端末ではテンキーは閉じない（常時表示）
@@ -5320,9 +5325,19 @@ function ensureCaretVisible(el){
 
     // ── カーソル位置を基準に編集する ──
     const len=el.value.length;
-    let start=el.selectionStart, end=el.selectionEnd;
+    // ボタンを押すとフォーカスが移りselectionが末尾になることがあるため、
+    // 直前に記録した位置（_lastSel）を優先して使う。
+    let start, end;
+    if(document.activeElement===el){
+      start=el.selectionStart; end=el.selectionEnd;
+    }else if(_lastSel[padKey]){
+      start=_lastSel[padKey].start; end=_lastSel[padKey].end;
+    }
     // 選択範囲が取得できない場合は末尾扱い
     if(start===null||start===undefined){start=len;end=len;}
+    if(end===null||end===undefined){end=start;}
+    // 値より大きい位置は末尾に丸める
+    if(start>len)start=len; if(end>len)end=len;
     let caret=start;
 
     if(val==='del'){
@@ -5354,7 +5369,10 @@ function ensureCaretVisible(el){
       }
     }
     // カーソル位置を復元し、その位置が見えるようにスクロール
+    // （キーボードはinputmode=noneで抑制されるためfocusしてもOSキーボードは出ない）
+    try{el.focus({preventScroll:true});}catch(e){try{el.focus();}catch(_){}}
     try{el.setSelectionRange(caret,caret);}catch(e){}
+    _lastSel[padKey]={start:caret,end:caret};
     ensureCaretVisible(el);
 
     showAmountCalcHint(el,hintId);
