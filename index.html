@@ -1,7 +1,8 @@
 <!--
  コード修正時には変更履歴を更新すること！
  * === 変更履歴 ===
-  * [v69,70]
+ * [v71] 数字キーボードの算術記号表示順変更
+ * [v69,70]
   *   - スマホでの金額入力欄常時表示
   * [v68]
  *   - 習慣カードの左スワイプ削除を2ステップ方式に変更
@@ -686,12 +687,12 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
     <div class="numpad-wrap" id="entry-numpad">
       <div class="numpad-grid">
         <div class="numpad-ops-row">
-          <button class="npk op" data-pad="entry" data-val="+">＋</button>
-          <button class="npk op" data-pad="entry" data-val="-">－</button>
-          <button class="npk op" data-pad="entry" data-val="*">×</button>
-          <button class="npk op" data-pad="entry" data-val="/">÷</button>
           <button class="npk op" data-pad="entry" data-val="(">(</button>
           <button class="npk op" data-pad="entry" data-val=")">)</button>
+          <button class="npk op" data-pad="entry" data-val="/">÷</button>
+          <button class="npk op" data-pad="entry" data-val="*">×</button>
+          <button class="npk op" data-pad="entry" data-val="-">－</button>
+          <button class="npk op" data-pad="entry" data-val="+">＋</button>
         </div>
         <button class="npk" data-pad="entry" data-val="7">7</button>
         <button class="npk" data-pad="entry" data-val="8">8</button>
@@ -1044,12 +1045,12 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
       <div class="numpad-wrap" id="edit-numpad">
         <div class="numpad-grid">
           <div class="numpad-ops-row">
-            <button class="npk op" data-pad="edit" data-val="+">＋</button>
-            <button class="npk op" data-pad="edit" data-val="-">－</button>
-            <button class="npk op" data-pad="edit" data-val="*">×</button>
-            <button class="npk op" data-pad="edit" data-val="/">÷</button>
             <button class="npk op" data-pad="edit" data-val="(">(</button>
             <button class="npk op" data-pad="edit" data-val=")">)</button>
+            <button class="npk op" data-pad="edit" data-val="/">÷</button>
+            <button class="npk op" data-pad="edit" data-val="*">×</button>
+            <button class="npk op" data-pad="edit" data-val="-">－</button>
+            <button class="npk op" data-pad="edit" data-val="+">＋</button>
           </div>
           <button class="npk" data-pad="edit" data-val="7">7</button>
           <button class="npk" data-pad="edit" data-val="8">8</button>
