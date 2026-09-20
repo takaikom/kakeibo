@@ -1,6 +1,12 @@
 <!--
  コード修正時には変更履歴を更新すること！
  * === 変更履歴 ===
+ * [v72] 明細タブにExcel風フィルターを追加
+ *   - 対象列：カテゴリ／摘要／相手勘定科目／日付（列ごとの ▾ ボタン）
+ *   - パネル内で検索文字列を入力→候補を抽出、チェックボックスで選択、OKで確定
+ *   - 列間はAND条件。収入・支出・収支サマリーも絞り込み結果で集計
+ *   - 期間切替では絞り込みを維持、グループ/ユーザー切替で自動解除
+ * [v71] 数字キーボードの算術記号表示順変更
  * [v71] 数字キーボードの算術記号表示順変更
  * [v69,70]
   *   - スマホでの金額入力欄常時表示
@@ -561,6 +567,27 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
 .welcome-add-row{display:flex;gap:8px;}
 .welcome-input{flex:1;height:44px;border:1.5px solid var(--accent);border-radius:12px;padding:0 14px;font-family:'Noto Sans JP',sans-serif;font-size:14px;color:var(--text);background:white;outline:none;}
 .welcome-btn{height:44px;padding:0 18px;border-radius:12px;border:none;background:var(--accent);color:white;font-family:'Noto Sans JP',sans-serif;font-size:14px;font-weight:700;cursor:pointer;}
+.lf-bar{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;}
+.lf-btn{height:30px;padding:0 10px;border-radius:8px;border:1.5px solid var(--border2);background:var(--surface);color:var(--text2);font-family:inherit;font-size:12px;cursor:pointer;white-space:nowrap;}
+.lf-btn.active{border-color:var(--blue);background:var(--blue-light);color:var(--blue);font-weight:600;}
+.lf-btn.open{box-shadow:0 0 0 2px var(--blue-light);}
+.lf-btn.lf-clear{border-color:var(--red-mid);color:var(--red);background:var(--red-light);}
+.lf-panel{background:var(--surface);border:1.5px solid var(--border2);border-radius:12px;padding:10px;margin-bottom:8px;}
+.lf-title{font-size:12px;font-weight:700;color:var(--text2);margin-bottom:6px;}
+.lf-search{width:100%;height:36px;border:1.5px solid var(--border2);border-radius:8px;padding:0 10px;font-family:inherit;font-size:16px;color:var(--text);background:white;outline:none;box-sizing:border-box;margin-bottom:6px;}
+.lf-search:focus{border-color:var(--blue);}
+.lf-list{max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;}
+.lf-row{display:flex;align-items:center;gap:8px;padding:7px 10px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--border);}
+.lf-row:last-child{border-bottom:none;}
+.lf-row input{width:16px;height:16px;flex-shrink:0;accent-color:var(--blue);}
+.lf-row.lf-all{font-weight:600;background:var(--surface2);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;}
+.lf-name{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.lf-cnt{font-size:11px;color:var(--text3);flex-shrink:0;}
+.lf-empty{padding:12px;text-align:center;font-size:12px;color:var(--text3);}
+.lf-actions{display:flex;gap:8px;margin-top:8px;}
+.lf-actions button{flex:1;height:34px;border-radius:8px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;}
+.lf-cancel{border:1.5px solid var(--border2);background:var(--surface);color:var(--text2);}
+.lf-ok{border:1.5px solid var(--blue);background:var(--blue);color:white;}
 </style>
 </head>
 <body>
@@ -765,6 +792,8 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
     <button class="period-nav-btn" onclick="navPeriod(1)">›</button>
   </div>
   <div class="summary-row" id="list-summary"></div>
+  <div class="lf-bar" id="list-filter-bar"></div>
+  <div class="lf-panel" id="list-filter-panel" style="display:none;"></div>
   <div id="tx-list"></div>
   <!-- ゴミ箱セクション -->
   <div id="trash-section" style="display:none;margin-top:16px;">
@@ -3071,7 +3100,22 @@ function jumpToCurrentMonth(type) {
   showToast('今月に戻りました');
 }
 
-function renderList(){
+// ── 明細フィルター（Excel風：検索文字列で抽出＋チェックボックスで選択）──
+const LIST_FILTER_COLS=[
+  {key:'category',label:'カテゴリ',get:t=>t.category||''},
+  {key:'desc',label:'摘要',get:t=>t.desc||''},
+  {key:'account',label:'相手勘定科目',get:t=>t.account||''},
+  {key:'date',label:'日付',get:t=>txDate(t)}
+];
+let listFilters={};      // {列key: Set(選択値)}　未設定＝絞り込みなし
+let listFilterOwner='';  // グループ/ユーザー切替で絞り込みを解除するための識別子
+let lfSig='';            // 期間切替でパネルを閉じるための識別子
+let lfOpenKey=null;      // 開いている列
+let lfDraft=new Set();   // パネル内の選択状態（OKで確定）
+let lfVals=[];           // パネル内の候補値 [{i,v,label,count,hay}]
+let lfQuery='';
+
+function listPeriodTxs(){
   let txs=getTransactions();
   let label='全期間';
   if(listMode==='month'){
@@ -3080,6 +3124,111 @@ function renderList(){
   }else if(listMode==='year'){
     txs=txs.filter(t=>txYear(t)===listPeriod);label=`${listPeriod}年`;
   }
+  return{txs,label};
+}
+function applyListFilters(txs,exceptKey){
+  return txs.filter(t=>LIST_FILTER_COLS.every(c=>{
+    if(c.key===exceptKey)return true;
+    const f=listFilters[c.key];
+    return !f||f.has(c.get(t));
+  }));
+}
+function lfNorm(s){return String(s).normalize('NFKC').toLowerCase();}
+function lfHidePanel(){
+  const p=document.getElementById('list-filter-panel');
+  if(p){p.style.display='none';p.innerHTML='';}
+}
+function renderListFilterBar(){
+  const bar=document.getElementById('list-filter-bar');if(!bar)return;
+  const any=Object.keys(listFilters).length>0;
+  bar.innerHTML=LIST_FILTER_COLS.map(c=>{
+    const f=listFilters[c.key];
+    return`<button class="lf-btn${f?' active':''}${lfOpenKey===c.key?' open':''}" onclick="openListFilter('${c.key}')">${c.label}${f?' ('+f.size+')':''} ▾</button>`;
+  }).join('')+(any?'<button class="lf-btn lf-clear" onclick="clearListFilters()">✕ 解除</button>':'');
+}
+function openListFilter(key){
+  if(lfOpenKey===key){closeListFilter();return;}
+  const col=LIST_FILTER_COLS.find(c=>c.key===key);if(!col)return;
+  // 候補値：表示期間の明細から、この列以外の絞り込みを適用したもの
+  const base=applyListFilters(listPeriodTxs().txs,key);
+  const cnt=new Map();
+  base.forEach(t=>{const v=col.get(t);cnt.set(v,(cnt.get(v)||0)+1);});
+  lfVals=[...cnt.entries()].map(([v,count])=>{
+    const label=v===''?'(空白)':(key==='date'?fmtDateLabel(v):v);
+    const hay=lfNorm(label+(key==='date'?' '+v+' '+v.replace(/-/g,'/'):''));
+    return{v,label,count,hay};
+  });
+  lfVals.sort(key==='date'?(a,b)=>b.v.localeCompare(a.v):(a,b)=>a.label.localeCompare(b.label,'ja'));
+  lfVals.forEach((x,i)=>{x.i=i;});
+  const f=listFilters[key];
+  lfDraft=new Set(lfVals.filter(x=>!f||f.has(x.v)).map(x=>x.v));
+  lfQuery='';lfOpenKey=key;
+  const p=document.getElementById('list-filter-panel');
+  p.innerHTML=`<div class="lf-title">${esc(col.label)}で絞り込み</div>
+    <input class="lf-search" type="search" placeholder="検索して抽出…" oninput="listFilterSearch(this.value)">
+    <label class="lf-row lf-all"><input type="checkbox" id="lf-all" onchange="listFilterToggleAll(this.checked)"><span class="lf-name">すべて選択</span></label>
+    <div class="lf-list" id="lf-list"></div>
+    <div class="lf-actions"><button class="lf-cancel" onclick="closeListFilter()">キャンセル</button><button class="lf-ok" onclick="applyListFilter()">OK</button></div>`;
+  p.style.display='';
+  renderListFilterItems();
+  renderListFilterBar();
+}
+function lfVisible(){
+  const q=lfNorm(lfQuery.trim());
+  return q?lfVals.filter(x=>x.hay.includes(q)):lfVals;
+}
+function lfSyncAll(){
+  const vis=lfVisible();
+  const all=document.getElementById('lf-all');
+  if(all){all.checked=vis.length>0&&vis.every(x=>lfDraft.has(x.v));all.disabled=!vis.length;}
+}
+function renderListFilterItems(keepScroll){
+  const el=document.getElementById('lf-list');if(!el)return;
+  const st=el.scrollTop;
+  const vis=lfVisible();
+  el.innerHTML=vis.length?vis.map(x=>`<label class="lf-row"><input type="checkbox" ${lfDraft.has(x.v)?'checked':''} onchange="listFilterToggle(${x.i},this.checked)"><span class="lf-name">${esc(x.label)}</span><span class="lf-cnt">${x.count}件</span></label>`).join(''):'<div class="lf-empty">該当なし</div>';
+  el.scrollTop=keepScroll?st:0;
+  lfSyncAll();
+}
+function listFilterSearch(q){
+  lfQuery=q;
+  // Excel同様、検索すると該当項目のみがチェックされた状態になる
+  if(q.trim())lfDraft=new Set(lfVisible().map(x=>x.v));
+  renderListFilterItems();
+}
+function listFilterToggle(i,on){
+  const x=lfVals[i];if(!x)return;
+  if(on)lfDraft.add(x.v);else lfDraft.delete(x.v);
+  lfSyncAll();
+}
+function listFilterToggleAll(on){
+  lfVisible().forEach(x=>{if(on)lfDraft.add(x.v);else lfDraft.delete(x.v);});
+  renderListFilterItems(true);
+}
+function applyListFilter(){
+  const key=lfOpenKey;if(!key)return;
+  const sel=lfVals.filter(x=>lfDraft.has(x.v)).map(x=>x.v);
+  if(!sel.length){showToast('⚠ 1件以上選択してください');return;}
+  if(sel.length===lfVals.length)delete listFilters[key];  // 全選択＝絞り込み解除
+  else listFilters[key]=new Set(sel);
+  closeListFilter();
+  renderList();
+}
+function closeListFilter(){
+  lfOpenKey=null;lfHidePanel();renderListFilterBar();
+}
+function clearListFilters(){
+  listFilters={};closeListFilter();renderList();
+}
+
+function renderList(){
+  // グループ/ユーザーが変わったら絞り込みを解除、期間が変わったらパネルを閉じる
+  const owner=getCurrentGroupId()+'|'+getCurrentUserId();
+  if(owner!==listFilterOwner){listFilterOwner=owner;listFilters={};}
+  if(owner+'|'+listMode+'|'+listPeriod!==lfSig){lfSig=owner+'|'+listMode+'|'+listPeriod;lfOpenKey=null;lfHidePanel();}
+  const{txs:periodTxs,label}=listPeriodTxs();
+  const txs=applyListFilters(periodTxs);
+  renderListFilterBar();
   document.getElementById('list-period-label').textContent=label;
   const income=txs.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
   const expense=txs.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
@@ -3094,7 +3243,7 @@ function renderList(){
   const byDateMap=new Map();
   sorted.forEach(t=>{const d=txDate(t);if(!byDateMap.has(d))byDateMap.set(d,[]);byDateMap.get(d).push(t);});
   const el=document.getElementById('tx-list');
-  if(!sorted.length){el.innerHTML='<div class="empty-state">取引がありません</div>';return;}
+  if(!sorted.length){el.innerHTML=`<div class="empty-state">${periodTxs.length?'条件に一致する取引がありません':'取引がありません'}</div>`;return;}
   el.innerHTML=[...byDateMap.entries()].map(([date,ts])=>{
     const dayIncome=ts.filter(t=>t.type==='income').reduce((s,t)=>s+t.amount,0);
     const dayExpense=ts.filter(t=>t.type==='expense').reduce((s,t)=>s+t.amount,0);
