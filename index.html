@@ -1,12 +1,16 @@
 <!--
  コード修正時には変更履歴を更新すること！
  * === 変更履歴 ===
+ * [v73] GASコードをアプリ内でコピー可能に／使い方ガイドを設定画面の最下部（ヘルプ欄）へ移動
+ *   - 設定画面最下部に「ヘルプ」欄を新設（使い方ガイドのリンク＋GASコードのコピーボタン）
+ *   - ☰メニューから使い方ガイドを削除
+ *   - GASコード本体は非表示の<script type="text/plain" id="gasCodeSource">に保持（GASコード.jsを更新したらここも同期すること）
+ *   - GASセットアップ手順③の文言をコピー方式に変更
  * [v72] 明細タブにExcel風フィルターを追加
  *   - 対象列：カテゴリ／摘要／相手勘定科目／日付（列ごとの ▾ ボタン）
  *   - パネル内で検索文字列を入力→候補を抽出、チェックボックスで選択、OKで確定
  *   - 列間はAND条件。収入・支出・収支サマリーも絞り込み結果で集計
  *   - 期間切替では絞り込みを維持、グループ/ユーザー切替で自動解除
- * [v71] 数字キーボードの算術記号表示順変更
  * [v71] 数字キーボードの算術記号表示順変更
  * [v69,70]
   *   - スマホでの金額入力欄常時表示
@@ -920,7 +924,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
       <div class="settings-card-title" style="margin-bottom:10px;">📋 GASセットアップ手順</div>
       <div class="setup-step"><div class="setup-num">1</div><div>Googleスプレッドシートを新規作成</div></div>
       <div class="setup-step"><div class="setup-num">2</div><div>「拡張機能」→「Apps Script」を開く</div></div>
-      <div class="setup-step"><div class="setup-num">3</div><div>添付の <code style="font-size:11px;background:var(--surface2);padding:1px 5px;border-radius:4px;">GASコード.js</code> を貼り付けて保存</div></div>
+      <div class="setup-step"><div class="setup-num">3</div><div>設定画面の最下部「ヘルプ」欄の「GASコードをコピー」でコピーしたコードを貼り付けて保存</div></div>
       <div class="setup-step"><div class="setup-num">4</div><div>「デプロイ」→「新しいデプロイ」→ 種類「ウェブアプリ」→ アクセス「全員」→ URLをコピーして上に貼り付け</div></div>
       <div class="setup-step"><div class="setup-num">5</div><div>他のメンバーも同じURLを設定し、同じグループ名・自分の名前で参加する</div></div>
     </div>
@@ -934,6 +938,113 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
       </div>
       <button class="secondary-btn" style="flex-shrink:0;height:38px;font-size:13px;white-space:nowrap;" onclick="clearCacheAndReload()">🔄 更新</button>
     </div>
+  </div>
+  <div class="section-label">ヘルプ</div>
+  <div class="settings-card">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--text2);">家計簿アプリ_使い方ガイド</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px;">操作マニュアルを開く（外部リンク）</div>
+      </div>
+      <a class="secondary-btn" href="https://drive.google.com/file/d/1oLU4Cf1-Kam_k6mTOT5xkph9Uk_S67yf/view?usp=sharing" target="_blank" rel="noopener" style="flex-shrink:0;height:38px;font-size:13px;white-space:nowrap;text-decoration:none;display:flex;align-items:center;">📖 開く</a>
+    </div>
+    <hr class="sheet-divider" style="margin:12px 0;">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:var(--text2);">GASコードをコピー</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px;">GASセットアップ手順③で貼り付けるコードを一括コピーします</div>
+      </div>
+      <button class="secondary-btn" id="copy-gas-btn" style="flex-shrink:0;height:38px;font-size:13px;white-space:nowrap;" onclick="copyGasCode()">📋 コピー</button>
+    </div>
+    <!-- GASコード本体（非表示・コピー用。type="text/plain"なので実行も表示もされない） -->
+    <script type="text/plain" id="gasCodeSource">const SHEET_NAME = 'kakeibo_data';
+const CHUNK_SIZE = 40000; // 1セルあたりの最大文字数（上限50,000に対する余裕）
+
+function getSheet() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_NAME);
+    sheet.getRange('A1').setValue('{}');
+  }
+  return sheet;
+}
+
+// A列の全セルを連結して1つのJSON文字列として返す
+function readRaw_(sheet) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 1) return '{}';
+  const values = sheet.getRange(1, 1, lastRow, 1).getValues();
+  return values.map(function (r) { return String(r[0]); }).join('') || '{}';
+}
+
+// JSON文字列をCHUNK_SIZEごとに分割してA列に書き込む
+function writeRaw_(sheet, raw) {
+  const chunks = [];
+  let i = 0;
+  while (i < raw.length) {
+    let end = Math.min(i + CHUNK_SIZE, raw.length);
+    // サロゲートペア（絵文字など）の途中で分割しない
+    if (end < raw.length) {
+      const c = raw.charCodeAt(end - 1);
+      if (c >= 0xD800 && c <= 0xDBFF) end--;
+    }
+    chunks.push(raw.substring(i, end));
+    i = end;
+  }
+  if (chunks.length === 0) chunks.push('{}');
+
+  const oldLastRow = sheet.getLastRow();
+  const range = sheet.getRange(1, 1, chunks.length, 1);
+  range.setNumberFormat('@'); // 文字列固定（数値・数式への自動変換を防止）
+  range.setValues(chunks.map(function (c) { return [c]; }));
+
+  // 以前より分割数が減った場合、余った旧セルを消去
+  if (oldLastRow > chunks.length) {
+    sheet.getRange(chunks.length + 1, 1, oldLastRow - chunks.length, 1).clearContent();
+  }
+  SpreadsheetApp.flush();
+}
+
+function doGet(e) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000); // 書き込み中の読み出しを防止
+  try {
+    const sheet = getSheet();
+    const raw = readRaw_(sheet);
+    let data;
+    try { data = JSON.parse(raw); } catch (err) { data = {}; }
+    // usersがなければ初期構造を返す
+    if (!data.users) {
+      data = { users: [], deletedUsers: [], groupName: '' };
+    }
+    return ContentService
+      .createTextOutput(JSON.stringify(data))
+      .setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function doPost(e) {
+  const lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+    const payload = JSON.parse(e.postData.contents);
+    const sheet = getSheet();
+    writeRaw_(sheet, JSON.stringify(payload));
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: true }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ ok: false, error: err.message }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    try { lock.releaseLock(); } catch (e2) {}
+  }
+}
+</script>
   </div>
 </div>
 
@@ -1003,10 +1114,6 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
         <div class="menu-icon" style="background:var(--amber-light);">📂</div>
         <div><div>インポート</div><div class="menu-item-desc">JSONバックアップから復元</div></div>
       </button>
-      <a href="https://drive.google.com/file/d/1oLU4Cf1-Kam_k6mTOT5xkph9Uk_S67yf/view?usp=sharing" target="_blank" rel="noopener" class="menu-item" style="text-decoration:none;">
-        <div class="menu-icon" style="background:var(--green-light);">📖</div>
-        <div><div>家計簿アプリ_使い方ガイド</div><div class="menu-item-desc">操作マニュアルを開く（外部リンク）</div></div>
-      </a>
 
     </div>
     <div class="sheet-footer">
@@ -5568,6 +5675,32 @@ document.getElementById('edit-amount').addEventListener('blur',function(){
 // ════════════════════════════════════════
 // アプリ手動アップデート（キャッシュ削除＋リロード）
 // ════════════════════════════════════════
+/* GASコードをクリップボードへ一括コピー（非表示の#gasCodeSourceから取得） */
+async function copyGasCode(){
+  const src=document.getElementById('gasCodeSource');
+  const code=src?src.textContent:'';
+  if(!code||!code.trim()){showToast('⚠ コードが見つかりません');return;}
+  const btn=document.getElementById('copy-gas-btn');
+  const done=()=>{
+    showToast('📋 GASコードをコピーしました');
+    if(btn){const o=btn.textContent;btn.textContent='✅ コピー済み';setTimeout(()=>{btn.textContent=o;},1600);}
+  };
+  try{
+    await navigator.clipboard.writeText(code);
+    done();
+  }catch(e){
+    // フォールバック：一時textareaを使ったコピー（非セキュアコンテキスト向け）
+    try{
+      const ta=document.createElement('textarea');
+      ta.value=code;ta.style.position='fixed';ta.style.opacity='0';ta.style.top='0';
+      document.body.appendChild(ta);ta.focus();ta.select();
+      const ok=document.execCommand('copy');
+      document.body.removeChild(ta);
+      if(ok){done();}else{showToast('⚠ コピーに失敗しました');}
+    }catch(e2){showToast('⚠ コピーに失敗しました');}
+  }
+}
+
 function clearCacheAndReload(){
   if(!confirm('キャッシュを削除してアプリを最新版に更新しますか？\n\n※ データは削除されません。')) return;
   if('caches' in window){
