@@ -1,7 +1,15 @@
 <!--
  コード修正時には変更履歴を更新すること！
  * === 変更履歴 ===
- * [v73] GASコードをアプリ内でコピー可能に／使い方ガイドを設定画面の最下部（ヘルプ欄）へ移動
+ * [v74] 「仕訳」タブを「推移」タブに変更／「集計」タブの項目順を設定順に統一
+ *   - 仕訳（複式簿記）画面の表示を廃止（データはCSVエクスポートで取得可能。ACCOUNT_MAP/accountNameは維持）
+ *   - 「推移」タブ：カテゴリ（項目）ごとに縦軸=金額・横軸=期間の棒グラフを表示
+ *     - 項目の並び順は「設定」タブの表示順（支出カテゴリ→収入カテゴリ、上から順）
+ *     - 月別（デフォルト・直近12ヶ月、当月が右端）／年別を切替可能。各グラフは横スクロールで期間を移動
+ *   - 横スクロール領域をPCのマウスホイール／ドラッグでも操作できるように対応（overflowはあるがホイールでは動かない問題を解消）
+ *   - 「集計」タブの科目別内訳（支出/収入）の並び順を、金額の多い順→「設定」タブの表示順に変更
+  *   - 「集計」タブの支出/収入内訳は、取引がない（¥0の）項目も含めて全項目を表示するように変更
+  * [v73] GASコードをアプリ内でコピー可能に／使い方ガイドを設定画面の最下部（ヘルプ欄）へ移動
  *   - 設定画面最下部に「ヘルプ」欄を新設（使い方ガイドのリンク＋GASコードのコピーボタン）
  *   - ☰メニューから使い方ガイドを削除
  *   - GASコード本体は非表示の<script type="text/plain" id="gasCodeSource">に保持（GASコード.jsを更新したらここも同期すること）
@@ -592,6 +600,25 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
 .lf-actions button{flex:1;height:34px;border-radius:8px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;}
 .lf-cancel{border:1.5px solid var(--border2);background:var(--surface);color:var(--text2);}
 .lf-ok{border:1.5px solid var(--blue);background:var(--blue);color:white;}
+.trend-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px 14px;margin-bottom:10px;}
+.trend-card-head{margin-bottom:6px;}
+.trend-card-name{font-size:13px;font-weight:700;color:var(--text2);}
+.trend-chart-row{display:flex;gap:4px;}
+.trend-yaxis{flex:0 0 34px;display:flex;flex-direction:column;align-items:flex-end;}
+.trend-yaxis-spacer{height:15px;}
+.trend-yaxis-ticks{height:90px;position:relative;width:100%;}
+.trend-yaxis-tick{position:absolute;right:3px;left:0;text-align:right;font-size:8px;color:var(--text3);white-space:nowrap;transform:translateY(-50%);}
+.trend-scroll{flex:1;min-width:0;display:flex;align-items:flex-end;gap:8px;overflow-x:auto;padding:0 2px;cursor:grab;-webkit-overflow-scrolling:touch;scrollbar-width:thin;}
+.trend-scroll.dragging{cursor:grabbing;user-select:none;}
+.trend-bar-col{flex:0 0 auto;width:30px;display:flex;flex-direction:column;align-items:center;}
+.trend-bar-amt{height:15px;font-size:8px;line-height:15px;color:var(--text3);white-space:nowrap;}
+.trend-bar-track{height:90px;width:100%;display:flex;align-items:flex-end;justify-content:center;border-bottom:1px solid var(--border);box-sizing:border-box;}
+.trend-bar{width:16px;min-height:2px;border-radius:3px 3px 0 0;background:var(--surface2);transition:height .3s;}
+.trend-bar.bar-fill{border-radius:3px 3px 0 0;}
+.trend-bar-label{font-size:9px;color:var(--text3);margin-top:3px;white-space:nowrap;}
+.trend-bar-col.trend-bar-cur .trend-bar-amt{color:var(--blue);font-weight:700;}
+.trend-bar-col.trend-bar-cur .trend-bar-label{color:var(--blue);font-weight:700;}
+.trend-empty{padding:20px;text-align:center;font-size:12px;color:var(--text3);}
 </style>
 </head>
 <body>
@@ -659,7 +686,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
       <button class="main-tab active" data-tab="home">🏠 ホーム</button>
       <button class="main-tab" data-tab="list">📋 明細</button>
       <button class="main-tab" data-tab="agg">📊 集計</button>
-      <button class="main-tab" data-tab="ledger">📒 仕訳</button>
+      <button class="main-tab" data-tab="ledger">📈 推移</button>
       <button class="main-tab" data-tab="settings">⚙️ 設定</button>
     </div>
   </div>
@@ -821,23 +848,13 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
   <div id="agg-content"></div>
 </div>
 
-<!-- ══ LEDGER TAB ══ -->
+<!-- ══ TREND TAB（旧・仕訳タブ） ══ -->
 <div id="tab-ledger" class="tab-body" style="display:none;">
-  <div class="section-label">期間</div>
   <div class="toggle-group">
-    <button class="toggle-btn active" data-ldmode="month" onclick="setLedgerMode('month')">月次</button>
-    <button class="toggle-btn" data-ldmode="year" onclick="setLedgerMode('year')">年次</button>
+    <button class="toggle-btn active" data-trendmode="monthly" onclick="setTrendMode('monthly')">月別</button>
+    <button class="toggle-btn" data-trendmode="yearly" onclick="setTrendMode('yearly')">年別</button>
   </div>
-  <!-- 【仕訳タブ】 -->
-  <div class="period-nav">
-    <button class="period-nav-btn" onclick="navLedgerPeriod(-1)">‹</button>
-    <div class="period-center-group">
-      <span class="period-label" id="ledger-period-label"></span>
-      <button class="today-btn" onclick="jumpToCurrentMonth('ledger')">今月</button>
-    </div>
-    <button class="period-nav-btn" onclick="navLedgerPeriod(1)">›</button>
-  </div>
-  <div id="ledger-content"></div>
+  <div id="trend-content"></div>
 </div>
 
 <!-- ══ SETTINGS TAB ══ -->
@@ -957,7 +974,17 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
       <button class="secondary-btn" id="copy-gas-btn" style="flex-shrink:0;height:38px;font-size:13px;white-space:nowrap;" onclick="copyGasCode()">📋 コピー</button>
     </div>
     <!-- GASコード本体（非表示・コピー用。type="text/plain"なので実行も表示もされない） -->
-    <script type="text/plain" id="gasCodeSource">const SHEET_NAME = 'kakeibo_data';
+    <script type="text/plain" id="gasCodeSource">// ============================================================
+//  家計簿 — 家族共有サーバー (Google Apps Script)
+//  このファイルの内容をGoogle Apps Scriptに貼り付けてください
+//
+//  [改修] 1セルの文字数上限(50,000字)対策
+//   - JSONをA列に分割して保存（A1, A2, A3 ... に連結順で格納）
+//   - 旧形式（A1のみ）のデータもそのまま読み込み可能
+//   - HTML側の変更は不要（通信仕様は従来と同一）
+// ============================================================
+
+const SHEET_NAME = 'kakeibo_data';
 const CHUNK_SIZE = 40000; // 1セルあたりの最大文字数（上限50,000に対する余裕）
 
 function getSheet() {
@@ -1989,7 +2016,7 @@ function renderTab(tab){
   if(tab==='home')    {renderHomeSummary();renderHomeBudget();renderHomeRecent();}
   if(tab==='list')    {renderList();}
   if(tab==='agg')     {renderAgg();}
-  if(tab==='ledger')  {renderLedger();}
+  if(tab==='ledger')  {renderTrend();}
   if(tab==='settings'){renderSettings();}
 }
 
@@ -3190,19 +3217,15 @@ function navPeriod(dir){
 }
 
 /**
- * 指定されたタブの表示期間を現在の年月に戻す
- * @param {string} type 'list' または 'ledger'
+ * 明細タブの表示期間を現在の年月に戻す
+ * @param {string} type 'list'
  */
 function jumpToCurrentMonth(type) {
   const now = new Date();
   const yearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  
   if (type === 'list') {
     listPeriod = yearMonth;
     renderList();
-  } else if (type === 'ledger') {
-    ledgerPeriod = yearMonth;
-    renderLedger();
   }
   showToast('今月に戻りました');
 }
@@ -3502,16 +3525,24 @@ function renderAgg(){
     else label=`${period}年`;
     const maxExpense=Math.max(...Object.values(p.expenseByCat),1);
     const maxIncome=Math.max(...Object.values(p.incomeByCat),1);
-    const expenseRows=Object.entries(p.expenseByCat).sort((a,b)=>b[1]-a[1]).map(([cat,amt])=>`
-      <div class="agg-cat-row">
+    // 並び順は「設定」タブの表示順（金額順ではない）。取引がない（¥0の）項目も含め全項目を表示し、設定にない科目は末尾に元の順で残す
+    const expCatOrder=getExpenseCats(),incCatOrder=getIncomeCats();
+    const expAllCats=[...expCatOrder,...Object.keys(p.expenseByCat).filter(c=>!expCatOrder.includes(c))];
+    const incAllCats=[...incCatOrder,...Object.keys(p.incomeByCat).filter(c=>!incCatOrder.includes(c))];
+    const expenseRows=expAllCats.map(cat=>{
+      const amt=p.expenseByCat[cat]||0;
+      return`<div class="agg-cat-row">
         <div class="agg-cat-header"><span class="agg-cat-name">${esc(cat)}</span><span class="agg-cat-val expense">-¥${fmtAmt(amt)}</span></div>
         <div class="bar-track"><div class="bar-fill expense-bar" style="width:${(amt/maxExpense*100).toFixed(1)}%"></div></div>
-      </div>`).join('');
-    const incomeRows=Object.entries(p.incomeByCat).sort((a,b)=>b[1]-a[1]).map(([cat,amt])=>`
-      <div class="agg-cat-row">
+      </div>`;
+    }).join('');
+    const incomeRows=incAllCats.map(cat=>{
+      const amt=p.incomeByCat[cat]||0;
+      return`<div class="agg-cat-row">
         <div class="agg-cat-header"><span class="agg-cat-name">${esc(cat)}</span><span class="agg-cat-val income">+¥${fmtAmt(amt)}</span></div>
         <div class="bar-track"><div class="bar-fill income-bar" style="width:${(amt/maxIncome*100).toFixed(1)}%"></div></div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
     return`<div class="agg-summary">
       <div class="agg-summary-row">
         <div class="agg-summary-item"><div class="agg-summary-sub">収入</div><div class="agg-summary-val income">+¥${fmtAmt(p.income)}</div></div>
@@ -3551,86 +3582,123 @@ const ACCOUNT_MAP={
 };
 function accountName(cat){return ACCOUNT_MAP[cat]||cat;}
 
-let ledgerMode='month';
-let ledgerPeriod = `${nowForInit.getFullYear()}-${String(nowForInit.getMonth()+1).padStart(2,'0')}`;
-function setLedgerMode(mode){
-  ledgerMode=mode;
-  document.querySelectorAll('[data-ldmode]').forEach(b=>b.classList.toggle('active',b.dataset.ldmode===mode));
-  resetLedgerPeriod();
+let trendMode='monthly';
+let trendScrollPos={}; // key:`${trendMode}:${type}:${カテゴリ名}` → 直前のスクロール位置（再描画のたびに右端へ戻らないように保持）
+function setTrendMode(mode){
+  trendMode=mode;
+  document.querySelectorAll('[data-trendmode]').forEach(b=>b.classList.toggle('active',b.dataset.trendmode===mode));
+  renderTrend();
 }
-function resetLedgerPeriod(){
+// 表示対象の期間キー一覧を返す（月別：直近12ヶ月を最小範囲としデータが古ければ延長／年別：直近5年を最小範囲としデータが古ければ延長）
+function trendPeriodsList(){
+  const txs=getTransactions();
   const now=new Date();
-  if(ledgerMode==='month')ledgerPeriod=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-  else ledgerPeriod=String(now.getFullYear());
-  renderLedger();
+  if(trendMode==='monthly'){
+    const curKey=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+    const d12=new Date(now.getFullYear(),now.getMonth()-11,1);
+    let minKey=`${d12.getFullYear()}-${String(d12.getMonth()+1).padStart(2,'0')}`;
+    txs.forEach(t=>{const k=txMonth(t);if(k<minKey)minKey=k;});
+    const list=[];
+    let[y,m]=minKey.split('-').map(Number);
+    const[cy,cm]=curKey.split('-').map(Number);
+    while(y<cy||(y===cy&&m<=cm)){list.push(`${y}-${String(m).padStart(2,'0')}`);m++;if(m>12){m=1;y++;}}
+    return{list,curKey};
+  }else{
+    const curKey=String(now.getFullYear());
+    let minKey=String(now.getFullYear()-4);
+    txs.forEach(t=>{const k=txYear(t);if(k<minKey)minKey=k;});
+    const list=[];
+    for(let y=Number(minKey);y<=Number(curKey);y++)list.push(String(y));
+    return{list,curKey};
+  }
 }
-function navLedgerPeriod(dir){
-  if(ledgerMode==='month'){
-    const[y,m]=ledgerPeriod.split('-').map(Number);
-    const d=new Date(y,m-1+dir,1);
-    ledgerPeriod=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-  }else{ledgerPeriod=String(Number(ledgerPeriod)+dir);}
-  renderLedger();
+function trendLabel(key){
+  if(trendMode==='monthly'){const[,m]=key.split('-');return`${parseInt(m)}月`;}
+  return`${key}年`;
 }
-function renderLedger(){
-  let txs=getTransactions();
-  let label='';
-  if(ledgerMode==='month'){
-    txs=txs.filter(t=>txMonth(t)===ledgerPeriod);
-    const[y,m]=ledgerPeriod.split('-');label=`${y}年${parseInt(m)}月`;
-  }else{txs=txs.filter(t=>txYear(t)===ledgerPeriod);label=`${ledgerPeriod}年`;}
-  document.getElementById('ledger-period-label').textContent=label;
-  const sorted=[...txs].sort((a,b)=>a.date.localeCompare(b.date)||String(a.id).localeCompare(String(b.id)));
-  let totalDebit=0,totalCredit=0;
-  const rows=sorted.map(t=>{
-    const isExpense=t.type==='expense';
-    const acc=accountName(t.category);
-    // 支払保留の場合、相手勘定を「未払金」「未収金」にする
-    const counterAcc=t.deferredType?t.deferredType:(t.account||'現金・預金');
-    const debitAcc=isExpense?acc:counterAcc;
-    const creditAcc=isExpense?counterAcc:acc;
-    // 読み替えが発生した場合、元のカテゴリ名を薄く表示
-    const mainAccTranslated=(isExpense&&acc!==t.category)||(!isExpense&&acc!==t.category);
-    const mainAccLabel=mainAccTranslated
-      ? `${esc(isExpense?acc:acc)} <span style="color:var(--text3);font-size:10px;font-weight:400;">（${esc(t.category)}）</span>`
-      : esc(isExpense?acc:acc);
-    // 支払保留バッジ
-    const deferredLedgerBadge=t.deferredType
-      ? `<span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;margin-left:4px;background:${t.paymentDate?'var(--green-light)':'var(--amber-light)'};color:${t.paymentDate?'var(--green)':'var(--amber)'};border:1px solid ${t.paymentDate?'var(--green)':'var(--amber)'};">${t.paymentDate?'決済済':'未決済'}</span>`
-      : '';
-    // 支払保留の補足情報
-    const obligStr=t.obligationDate?'　債務発生日:'+t.obligationDate:'';
-    const payStr=t.paymentDate?'　支払日:'+t.paymentDate:'';
-    if(isExpense)totalDebit+=t.amount;else totalCredit+=t.amount;
-    return`<div class="ledger-row ${isExpense?'expense-row':'income-row'}">
-      <div class="ledger-cell">
-        <div class="ledger-acc">${fmtDateShort(t.date)}　${mainAccLabel}${deferredLedgerBadge}</div>
-        <div class="ledger-acc-sub" style="padding-left:14px;">　（${esc(creditAcc)}）${t.desc?'　'+esc(t.desc):''}${obligStr?'<span style="color:var(--text3);font-size:10px;">'+obligStr+payStr+'</span>':''}</div>
+// キリのいい縦軸目盛りを計算（1・2・5×10のべき乗）。例：最大31,000→step10,000・目盛0/10,000/…/40,000、最大9,000→step5,000・目盛0/5,000/10,000
+function niceTrendTicks(max){
+  if(!(max>0))max=1;
+  const raw=max/3;
+  const mag=Math.pow(10,Math.max(0,Math.floor(Math.log10(raw))));
+  const norm=raw/mag;
+  const n=norm<1.5?1:norm<3?2:norm<7?5:10;
+  const step=n*mag;
+  const count=Math.min(8,Math.ceil(max/step));
+  const top=count*step;
+  const ticks=[];
+  for(let i=0;i<=count;i++)ticks.push(i*step);
+  return{step,top,ticks};
+}
+// PC（マウス）でも横スクロールできるよう、ホイール縦入力を横スクロールに変換し、ドラッグ操作にも対応
+function enableTrendHScroll(el){
+  if(el.dataset.hscrollBound)return;
+  el.dataset.hscrollBound='1';
+  el.addEventListener('wheel',e=>{
+    if(el.scrollWidth<=el.clientWidth)return;
+    e.preventDefault();
+    el.scrollLeft+=(Math.abs(e.deltaY)>Math.abs(e.deltaX)?e.deltaY:e.deltaX);
+  },{passive:false});
+  let dragging=false,startX=0,startScroll=0;
+  el.addEventListener('mousedown',e=>{dragging=true;el.classList.add('dragging');startX=e.pageX;startScroll=el.scrollLeft;});
+  window.addEventListener('mouseup',()=>{dragging=false;el.classList.remove('dragging');});
+  el.addEventListener('mouseleave',()=>{dragging=false;el.classList.remove('dragging');});
+  el.addEventListener('mousemove',e=>{
+    if(!dragging)return;
+    e.preventDefault();
+    el.scrollLeft=startScroll-(e.pageX-startX);
+  });
+}
+function renderTrend(){
+  const txs=getTransactions();
+  const el=document.getElementById('trend-content');
+  if(!txs.length){el.innerHTML='<div class="trend-empty">データがありません</div>';return;}
+  const{list:periods,curKey}=trendPeriodsList();
+  const keyFn=trendMode==='monthly'?txMonth:txYear;
+  // 項目の並び順は「設定」タブの表示順（支出カテゴリ→収入カテゴリ）
+  const items=[...getExpenseCats().map(c=>({name:c,type:'expense'})),...getIncomeCats().map(c=>({name:c,type:'income'}))];
+  el.innerHTML=items.map(item=>{
+    const byPeriod={};
+    txs.forEach(t=>{
+      if(t.type!==item.type||t.category!==item.name)return;
+      const k=keyFn(t);
+      byPeriod[k]=(byPeriod[k]||0)+t.amount;
+    });
+    const rawMax=Math.max(...periods.map(k=>byPeriod[k]||0),1);
+    const{top:niceMax,ticks}=niceTrendTicks(rawMax);
+    const barCls=item.type==='expense'?'expense-bar':'income-bar';
+    const skey=`${trendMode}:${item.type}:${item.name}`;
+    const bars=periods.map(k=>{
+      const amt=byPeriod[k]||0;
+      const h=amt?Math.max(6,Math.round(amt/niceMax*100)):3;
+      const cur=k===curKey?' trend-bar-cur':'';
+      return`<div class="trend-bar-col${cur}" title="${esc(trendLabel(k))}：¥${fmtAmt(amt)}">
+        <div class="trend-bar-amt">${amt?fmtAmt(amt):''}</div>
+        <div class="trend-bar-track"><div class="trend-bar bar-fill ${barCls}" style="height:${h}%"></div></div>
+        <div class="trend-bar-label">${esc(trendLabel(k))}</div>
+      </div>`;
+    }).join('');
+    const yaxisTicks=[...ticks].reverse().map(v=>`<span class="trend-yaxis-tick" style="top:${((1-v/niceMax)*100).toFixed(2)}%">${fmtAmt(v)}</span>`).join('');
+    return`<div class="trend-card">
+      <div class="trend-card-head"><span class="trend-card-name">${esc(item.name)}</span></div>
+      <div class="trend-chart-row">
+        <div class="trend-yaxis">
+          <div class="trend-yaxis-spacer"></div>
+          <div class="trend-yaxis-ticks">${yaxisTicks}</div>
+          <div class="trend-yaxis-spacer"></div>
+        </div>
+        <div class="trend-scroll" data-trendscroll data-skey="${esc(skey)}">${bars}</div>
       </div>
-      <div class="ledger-cell mono debit">${isExpense?'¥'+fmtAmt(t.amount):''}</div>
-      <div class="ledger-cell mono credit">${!isExpense?'¥'+fmtAmt(t.amount):''}</div>
-      <div class="ledger-cell mono" style="color:${isExpense?'var(--expense-color)':'var(--income-color)'};">${isExpense?'-':'+'}¥${fmtAmt(t.amount)}</div>
     </div>`;
   }).join('');
-  const el=document.getElementById('ledger-content');
-  if(!sorted.length){el.innerHTML='<div class="empty-state">仕訳データがありません</div>';return;}
-  el.innerHTML=`<div class="ledger-table">
-    <div class="ledger-head">
-      <div>勘定科目・摘要</div>
-      <div style="text-align:right;">借方</div>
-      <div style="text-align:right;">貸方</div>
-      <div style="text-align:right;">差引</div>
-    </div>
-    ${rows}
-    <div class="ledger-total">
-      <div>合計</div>
-      <div style="text-align:right;font-family:'DM Mono',monospace;color:var(--expense-color);">¥${fmtAmt(totalDebit)}<span class="ledger-total-label">借方（支出）</span></div>
-      <div style="text-align:right;font-family:'DM Mono',monospace;color:var(--income-color);">¥${fmtAmt(totalCredit)}<span class="ledger-total-label">貸方（収入）</span></div>
-      <div style="text-align:right;font-family:'DM Mono',monospace;color:${totalCredit>=totalDebit?'var(--balance-pos)':'var(--balance-neg)'};">${totalCredit>=totalDebit?'+':'-'}¥${fmtAmt(Math.abs(totalCredit-totalDebit))}<span class="ledger-total-label">差引残高</span></div>
-    </div>
-  </div>`;
+  // スクロール位置を保持（バックグラウンド再描画のたびに右端へ戻らないように）。未経験の期間区分の場合のみ、当月/当年が右端に来るデフォルト位置にする
+  el.querySelectorAll('[data-trendscroll]').forEach(sc=>{
+    const key=sc.dataset.skey;
+    sc.scrollLeft=(key in trendScrollPos)?trendScrollPos[key]:sc.scrollWidth;
+    sc.addEventListener('scroll',()=>{trendScrollPos[key]=sc.scrollLeft;});
+    enableTrendHScroll(sc);
+  });
 }
-
 // ════════════════════════════════════════
 // SETTINGS
 // ════════════════════════════════════════
