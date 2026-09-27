@@ -1,6 +1,9 @@
 <!--
  コード修正時には変更履歴を更新すること！
  * === 変更履歴 ===
+ * [v75] 収支登録フォームで、摘要を入力すると同じ摘要の直前の登録と同じ相手勘定科目を自動選択
+ *   - 一致は「同じ収支種別（支出/収入）」かつ「摘要が完全一致」の取引のうち、登録順で最も新しいものを採用
+ *   - 手動でプルダウン／直接入力欄を選び直せば、その選択が優先される（摘要を再入力するまで自動上書きしない）
  * [v74] 「仕訳」タブを「推移」タブに変更／「集計」タブの項目順を設定順に統一
  *   - 仕訳（複式簿記）画面の表示を廃止（データはCSVエクスポートで取得可能。ACCOUNT_MAP/accountNameは維持）
  *   - 「推移」タブ：カテゴリ（項目）ごとに縦軸=金額・横軸=期間の棒グラフを表示
@@ -9,7 +12,7 @@
  *   - 横スクロール領域をPCのマウスホイール／ドラッグでも操作できるように対応（overflowはあるがホイールでは動かない問題を解消）
  *   - 「集計」タブの科目別内訳（支出/収入）の並び順を、金額の多い順→「設定」タブの表示順に変更
   *   - 「集計」タブの支出/収入内訳は、取引がない（¥0の）項目も含めて全項目を表示するように変更
-  * [v73] GASコードをアプリ内でコピー可能に／使い方ガイドを設定画面の最下部（ヘルプ欄）へ移動
+ * [v73] GASコードをアプリ内でコピー可能に／使い方ガイドを設定画面の最下部（ヘルプ欄）へ移動
  *   - 設定画面最下部に「ヘルプ」欄を新設（使い方ガイドのリンク＋GASコードのコピーボタン）
  *   - ☰メニューから使い方ガイドを削除
  *   - GASコード本体は非表示の<script type="text/plain" id="gasCodeSource">に保持（GASコード.jsを更新したらここも同期すること）
@@ -722,7 +725,7 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
       </div>
       <div style="flex:1;min-width:0;">
         <div class="form-label">摘要</div>
-        <input class="form-input" id="entry-desc" type="text" placeholder="例：スーパー" maxlength="40" list="entry-desc-list" autocomplete="off">
+        <input class="form-input" id="entry-desc" type="text" placeholder="例：スーパー" maxlength="40" list="entry-desc-list" autocomplete="off" oninput="onEntryDescInput(this.value)">
         <datalist id="entry-desc-list"></datalist>
       </div>
     </div>
@@ -2437,6 +2440,29 @@ function selectEntryAccount(acc){
 function onEntryAccountCustomInput(val){
   if(val.trim()){entrySelectedAccount='__custom_acc__';}
   else{entrySelectedAccount='';}
+  renderEntryAccountPicker();
+}
+
+// 摘要を入力したら、同じ摘要（同じ収支種別）の直前の登録と同じ相手勘定科目を自動選択する
+function onEntryDescInput(val){
+  const desc=val.trim();
+  if(!desc)return;
+  const txs=getTransactions();
+  let match=null;
+  for(let i=txs.length-1;i>=0;i--){
+    const t=txs[i];
+    if(t.type===entryType&&t.account&&(t.desc||'').trim()===desc){match=t;break;}
+  }
+  if(!match)return;
+  const known=entryType==='expense'?getExpenseAccounts():getIncomeAccounts();
+  const customInput=document.getElementById('entry-account-custom');
+  if(known.includes(match.account)){
+    entrySelectedAccount=match.account;
+    if(customInput)customInput.value='';
+  }else{
+    entrySelectedAccount='__custom_acc__';
+    if(customInput)customInput.value=match.account;
+  }
   renderEntryAccountPicker();
 }
 
