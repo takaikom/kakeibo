@@ -1,6 +1,11 @@
 <!--
  コード修正時には変更履歴を更新すること！
  * === 変更履歴 ===
+ * [v76] CSVインポートを追加（取引データのCSVエクスポートと同じ構造のCSVを取り込み）
+ *   - 設定タブ「データ管理」と☰メニューに「CSVインポート」を追加
+ *   - 対象：現在のユーザーに追加（既存データは消さない）。日付・種別・摘要・金額・カテゴリ・メモが完全一致する行は重複としてスキップ
+ *   - 必須列：日付／種別／カテゴリ／金額。不正な行はスキップして件数を表示
+ *   - 仕訳CSV（2ファイル目）は取り込み対象外（ヘッダー不一致で警告）
  * [v75] 収支登録フォームで、摘要を入力すると同じ摘要の直前の登録と同じ相手勘定科目を自動選択
  *   - 一致は「同じ収支種別（支出/収入）」かつ「摘要が完全一致」の取引のうち、登録順で最も新しいものを採用
  *   - 手動でプルダウン／直接入力欄を選び直せば、その選択が優先される（摘要を再入力するまで自動上書きしない）
@@ -920,6 +925,8 @@ body{font-family:'Noto Sans JP',sans-serif;background:var(--bg);color:var(--text
     <button class="export-btn" onclick="exportJSON()">💾 JSON バックアップ</button>
     <input type="file" id="import-file" accept=".json" style="display:none" onchange="importJSON(event)">
     <button class="export-btn" onclick="document.getElementById('import-file').click()">📂 JSON インポート</button>
+    <input type="file" id="import-csv-file" accept=".csv,text/csv" style="display:none" onchange="importCSV(event)">
+    <button class="export-btn" onclick="document.getElementById('import-csv-file').click()">📥 CSV インポート</button>
     <hr class="sheet-divider">
     <button class="danger-btn" onclick="clearUser()">🗑 このユーザーのデータを削除</button>
   </div>
@@ -1144,6 +1151,10 @@ function doPost(e) {
         <div class="menu-icon" style="background:var(--amber-light);">📂</div>
         <div><div>インポート</div><div class="menu-item-desc">JSONバックアップから復元</div></div>
       </button>
+      <button class="menu-item" id="menu-import-csv-btn">
+        <div class="menu-icon" style="background:var(--amber-light);">📥</div>
+        <div><div>CSVインポート</div><div class="menu-item-desc">取引CSV（エクスポートと同じ形式）を追加</div></div>
+      </button>
 
     </div>
     <div class="sheet-footer">
@@ -1152,6 +1163,7 @@ function doPost(e) {
   </div>
 </div>
 <input type="file" id="menu-import-file" accept=".json" style="display:none" onchange="importJSON(event)">
+<input type="file" id="menu-import-csv-file" accept=".csv,text/csv" style="display:none" onchange="importCSV(event)">
 
 <!-- ══ EDIT SHEET ══ -->
 <div class="sheet-overlay" id="edit-sheet">
@@ -4646,6 +4658,80 @@ function exportCSV(){
   showToast('📄 CSV（取引＋仕訳）をダウンロードしました');
 }
 
+function parseCSV(text){
+  if(text.charCodeAt(0)===0xFEFF)text=text.slice(1);
+  const rows=[];let row=[],cur='',q=false;
+  for(let i=0;i<text.length;i++){
+    const c=text[i];
+    if(q){
+      if(c==='"'){if(text[i+1]==='"'){cur+='"';i++;}else q=false;}
+      else cur+=c;
+    }else if(c==='"')q=true;
+    else if(c===','){row.push(cur);cur='';}
+    else if(c==='\n'||c==='\r'){
+      if(c==='\r'&&text[i+1]==='\n')i++;
+      row.push(cur);cur='';rows.push(row);row=[];
+    }else cur+=c;
+  }
+  if(cur!==''||row.length){row.push(cur);rows.push(row);}
+  return rows.filter(r=>r.some(v=>String(v).trim()!==''));
+}
+
+function normalizeCSVDate(v){
+  const m=String(v).trim().match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})$/);
+  if(!m)return '';
+  const y=+m[1],mo=+m[2],d=+m[3];
+  const dt=new Date(y,mo-1,d);
+  if(dt.getFullYear()!==y||dt.getMonth()!==mo-1||dt.getDate()!==d)return '';
+  return `${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+}
+
+function importCSV(e){
+  const file=e.target.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    try{
+      const rows=parseCSV(String(ev.target.result));
+      if(!rows.length)throw new Error('empty');
+      const head=rows[0].map(h=>String(h).trim());
+      const need=['日付','種別','カテゴリ','金額'];
+      if(need.some(h=>!head.includes(h))){showToast('⚠ 取引CSVの形式ではありません（仕訳CSVは取り込めません）');return;}
+      const ix=n=>head.indexOf(n);
+      const get=(r,n)=>{const i=ix(n);return i<0?'':String(r[i]??'').trim();};
+      const key=t=>[t.date,t.type,t.category,t.desc||'',t.amount,t.memo||''].join('\u0001');
+      const existing=new Set((getCurrentUser().transactions||[]).map(key));
+      const newTxs=[];let skipBad=0,skipDup=0;
+      const tmp=[...(getCurrentUser().transactions||[])];
+      rows.slice(1).forEach(r=>{
+        const date=normalizeCSVDate(get(r,'日付'));
+        const typeRaw=get(r,'種別');
+        const type=typeRaw==='収入'?'income':typeRaw==='支出'?'expense':'';
+        const category=get(r,'カテゴリ');
+        const amount=Number(get(r,'金額').replace(/[,，¥￥\s]/g,''));
+        if(!date||!type||!category||!isFinite(amount)||amount<=0){skipBad++;return;}
+        const t={type,amount,category,date,desc:get(r,'摘要'),memo:get(r,'メモ'),account:get(r,'相手勘定科目')};
+        const k=key(t);
+        if(existing.has(k)){skipDup++;return;}
+        existing.add(k);
+        const def=get(r,'支払区分');
+        if(def){t.deferredType=def;t.obligationDate=get(r,'債務発生日');t.paymentDate=get(r,'支払日');}
+        // ID採番（同日内の連番）
+        const prefix=date.replace(/-/g,'')+'-';
+        let maxSeq=0;
+        tmp.forEach(x=>{if(x.id&&String(x.id).startsWith(prefix)){const n=parseInt(String(x.id).split('-')[1]||'0');if(!isNaN(n)&&n>maxSeq)maxSeq=n;}});
+        t.id=prefix+String(maxSeq+1).padStart(2,'0');
+        tmp.push(t);newTxs.push(t);
+      });
+      if(!newTxs.length){showToast(`⚠ 追加できる行がありません（重複${skipDup}件／不正${skipBad}件）`);return;}
+      if(!confirm(`「${getCurrentUser().name}」に ${newTxs.length} 件を追加します。\n（重複スキップ ${skipDup} 件／不正行スキップ ${skipBad} 件）\nよろしいですか？`))return;
+      mutateUser(u=>{if(!u.transactions)u.transactions=[];newTxs.forEach(t=>u.transactions.push(t));});
+      saveData();renderAll();renderHomeSummary();renderHomeBudget();
+      showToast(`✅ ${newTxs.length}件をインポートしました`);
+    }catch{showToast('⚠ CSVを読み込めませんでした');}
+  };
+  reader.readAsText(file,'utf-8');e.target.value='';
+}
+
 function exportJSON(){
   const d=loadGroupData();
   const blob=new Blob([JSON.stringify(d,null,2)],{type:'application/json'});
@@ -5232,6 +5318,9 @@ document.getElementById('menu-backup-btn').addEventListener('click',()=>{closeMe
 
 // インポート
 document.getElementById('menu-import-btn').addEventListener('click',()=>{closeMenu();document.getElementById('menu-import-file').click();});
+
+// CSVインポート
+document.getElementById('menu-import-csv-btn').addEventListener('click',()=>{closeMenu();document.getElementById('menu-import-csv-file').click();});
 
 // GAS SETTINGS BUTTONS
 // ════════════════════════════════════════
